@@ -26,3 +26,9 @@ class JobRecord(JobStatus):
     address: str
     dxf_url: AnyUrl
     config: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FileUploadResponse(BaseModel):
+    filename: str
+    stored_path: str
+    file_url: str

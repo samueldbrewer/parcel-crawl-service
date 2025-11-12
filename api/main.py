@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from api.routes import jobs
+from api.routes import jobs, uploads
 
 app = FastAPI(title="Parcel Crawl API", version="0.1.0")
 
@@ -11,3 +11,4 @@ async def health() -> dict[str, str]:
 
 
 app.include_router(jobs.router, prefix="/jobs", tags=["jobs"])
+app.include_router(uploads.router, prefix="/files", tags=["files"])

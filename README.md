@@ -38,6 +38,30 @@ curl -s http://localhost:8000/jobs/<job_id> | jq
 `result.artifacts` lists the manifest, cycle PNG/JSON files, and parcel directories under
 `storage/jobs/<job_id>/outputs`.
 
+## Uploading DXFs to the server
+
+If your Railway deployment mounts a volume at `/data`, you can push DXFs directly through the API and
+reference them later via `file://` URLs:
+
+```bash
+# Upload from local disk
+curl -s -X POST https://landlens.up.railway.app/files \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@/path/to/P14_LE_BASE_FOOTPRINT.dxf" \
+  | jq
+
+# Response snippet
+{
+  "filename": "P14_LE_BASE_FOOTPRINT.dxf",
+  "stored_path": "/data/dxf/P14_LE_BASE_FOOTPRINT.dxf",
+  "file_url": "file:///data/dxf/P14_LE_BASE_FOOTPRINT.dxf"
+}
+```
+
+Use the returned `file_url` (e.g., `file:///data/dxf/P14_LE_BASE_FOOTPRINT.dxf`) as the `dxf_url` when
+submitting `/jobs` requests. Override the upload directory with `DXF_UPLOAD_ROOT` if your volume is mounted
+somewhere else.
+
 ## Environment variables
 
 | Variable | Purpose |
@@ -48,6 +72,7 @@ curl -s http://localhost:8000/jobs/<job_id> | jq
 | `PARCEL_CRAWL_SCRIPT` | Path to `parcel_crawl_demo_v4.py` if you relocate it. |
 | `JOB_STORAGE_ROOT` | Root directory for job workspaces (defaults to `storage/jobs`). |
 | `DXF_DOWNLOAD_TIMEOUT` | DXF download timeout in seconds (default 120). |
+| `DXF_UPLOAD_ROOT` | Directory where `/files` uploads will be stored (default `/data/dxf`). |
 
 ## Storage layout
 
