@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException
@@ -37,7 +38,14 @@ async def read_job(job_id: str) -> models.JobRecord:
     return job
 
 
-def update_job_status(job_id: str, status: str, *, result_url: str | None = None, error: str | None = None) -> None:
+def update_job_status(
+    job_id: str,
+    status: str,
+    *,
+    result_url: str | None = None,
+    error: str | None = None,
+    result: dict[str, Any] | None = None,
+) -> None:
     job = JOBS.get(job_id)
     if not job:
         return
@@ -46,3 +54,5 @@ def update_job_status(job_id: str, status: str, *, result_url: str | None = None
         job.result_url = result_url  # type: ignore[assignment]
     if error:
         job.error = error
+    if result is not None:
+        job.result = result
