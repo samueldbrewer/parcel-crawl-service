@@ -72,3 +72,13 @@ async def upload_dxf(file: UploadFile = File(...), filename: Optional[str] = Non
         stored_path=str(destination),
         file_url=file_url,
     )
+
+
+def describe_upload_target() -> dict[str, object]:
+    exists = UPLOAD_ROOT.exists()
+    writable = os.access(UPLOAD_ROOT, os.W_OK) if exists else False
+    return {
+        "path": str(UPLOAD_ROOT),
+        "exists": exists,
+        "writable": writable,
+    }
