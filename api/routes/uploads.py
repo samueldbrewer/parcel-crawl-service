@@ -11,7 +11,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from api import models
 
-UPLOAD_ROOT = Path(os.getenv("DXF_UPLOAD_ROOT", "/data/dxf")).resolve()
+UPLOAD_ROOT = Path(os.getenv("DXF_UPLOAD_ROOT", "/data")).resolve()
 router = APIRouter()
 
 

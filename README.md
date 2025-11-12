@@ -58,7 +58,7 @@ curl -s -X POST https://landlens.up.railway.app/files \
 }
 ```
 
-Use the returned `file_url` (e.g., `file:///data/dxf/P14_LE_BASE_FOOTPRINT.dxf`) as the `dxf_url` when
+Use the returned `file_url` (e.g., `file:///data/P14_LE_BASE_FOOTPRINT.dxf`) as the `dxf_url` when
 submitting `/jobs` requests. Override the upload directory with `DXF_UPLOAD_ROOT` if your volume is mounted
 somewhere else.
 
@@ -72,7 +72,7 @@ somewhere else.
 | `PARCEL_CRAWL_SCRIPT` | Path to `parcel_crawl_demo_v4.py` if you relocate it. |
 | `JOB_STORAGE_ROOT` | Root directory for job workspaces (defaults to `storage/jobs`). |
 | `DXF_DOWNLOAD_TIMEOUT` | DXF download timeout in seconds (default 120). |
-| `DXF_UPLOAD_ROOT` | Directory where `/files` uploads will be stored (default `/data/dxf`). |
+| `DXF_UPLOAD_ROOT` | Directory where `/files` uploads will be stored (default `/data`). |
 
 ## Storage layout
 
