@@ -62,7 +62,8 @@ curl -s -X POST https://landlens.up.railway.app/files \
 Use the returned `file_url` (e.g., `file:///data/P14_LE_BASE_FOOTPRINT.dxf`) as the `dxf_url` when
 submitting `/jobs` requests. The `download_url` is a public HTTPS endpoint that streams the stored file
 back, making it easy to verify uploads or share them with other services. Override the upload directory
-with `DXF_UPLOAD_ROOT` if your volume is mounted somewhere else.
+with `DXF_UPLOAD_ROOT` if your volume is mounted somewhere else. The desktop uploader honors the
+`UPLOAD_TIMEOUT` environment variable (default 900 seconds) so larger DXFs have time to finish streaming.
 
 ## Environment variables
 
