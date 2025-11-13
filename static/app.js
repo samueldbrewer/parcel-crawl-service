@@ -22,22 +22,24 @@ const clearCanvasBtn = document.getElementById('clearCanvas');
 
 const padding = 20;
 let pollTimer = null;
-let remoteFiles = [];
+let currentFilename = null;
+let geometryPaths = [];
+let viewBox = { minX: -50, maxX: 50, minY: -50, maxY: 50, scale: 2 };
+let captureMode = 'footprint';
+let rectanglePoints = [];
+let frontPoints = [];
 let footprintWorld = [];
 let frontOrigin = null;
 let frontVector = null;
-let captureMode = 'footprint';
-let frontStage = 0;
-let viewBox = { minX: 0, maxX: 100, minY: 0, maxY: 100, scale: 1 };
 
 async function refreshFiles() {
   try {
     const resp = await fetch('/files');
     if (!resp.ok) throw new Error('Request failed');
-    remoteFiles = await resp.json();
+    const data = await resp.json();
     filesTableBody.innerHTML = '';
     dxfSelect.innerHTML = '<option value="">-- Select a file --</option>';
-    remoteFiles.forEach((file) => {
+    data.forEach((file) => {
       const row = document.createElement('tr');
       const nameCell = document.createElement('td');
       nameCell.textContent = file.filename;
@@ -52,7 +54,7 @@ async function refreshFiles() {
       const delBtn = document.createElement('button');
       delBtn.textContent = 'Delete';
       delBtn.className = 'danger';
-      delBtn.addEventListener('click', () => confirmDelete(file.filename));
+      delBtn.addEventListener('click', () => deleteFile(file.filename));
       deleteCell.appendChild(delBtn);
       row.appendChild(nameCell);
       row.appendChild(linkCell);
@@ -65,9 +67,21 @@ async function refreshFiles() {
       opt.dataset.filename = file.filename;
       dxfSelect.appendChild(opt);
     });
-    statusText.textContent = `Loaded ${remoteFiles.length} files.`;
+    statusText.textContent = `Loaded ${data.length} files.`;
   } catch (err) {
     statusText.textContent = `Failed to fetch files: ${err}`;
+  }
+}
+
+async function deleteFile(filename) {
+  if (!window.confirm(`Delete ${filename}?`)) return;
+  try {
+    const resp = await fetch(`/files/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error(await resp.text());
+    statusText.textContent = `Deleted ${filename}.`;
+    await refreshFiles();
+  } catch (err) {
+    statusText.textContent = `Delete failed: ${err}`;
   }
 }
 
@@ -84,22 +98,42 @@ async function handleUpload(event) {
     const resp = await fetch('/files', { method: 'POST', body: formData });
     if (!resp.ok) throw new Error(await resp.text());
     const payload = await resp.json();
-    statusText.textContent = `Uploaded ${payload.filename}`;
     resultBox.textContent = JSON.stringify(payload, null, 2);
+    statusText.textContent = `Uploaded ${payload.filename}`;
     await refreshFiles();
     Array.from(dxfSelect.options).forEach((opt) => {
-      if (opt.dataset.filename === payload.filename) {
-        opt.selected = true;
-      }
+      if (opt.dataset.filename === payload.filename) opt.selected = true;
     });
   } catch (err) {
     statusText.textContent = `Upload failed: ${err}`;
   }
 }
 
-function computeViewBox() {
-  const xs = footprintWorld.map((p) => p[0]);
-  const ys = footprintWorld.map((p) => p[1]);
+function worldToCanvas([x, y]) {
+  const cx = ((x - viewBox.minX) * viewBox.scale) + padding;
+  const cy = canvas.height - (((y - viewBox.minY) * viewBox.scale) + padding);
+  return [cx, cy];
+}
+
+function canvasToWorld(x, y) {
+  const wx = ((x - padding) / viewBox.scale) + viewBox.minX;
+  const wy = ((canvas.height - y - padding) / viewBox.scale) + viewBox.minY;
+  return [wx, wy];
+}
+
+function recomputeViewBox() {
+  const xs = [];
+  const ys = [];
+  geometryPaths.forEach((path) => {
+    path.forEach(([x, y]) => {
+      xs.push(x);
+      ys.push(y);
+    });
+  });
+  footprintWorld.forEach(([x, y]) => {
+    xs.push(x);
+    ys.push(y);
+  });
   if (frontOrigin) {
     xs.push(frontOrigin[0]);
     ys.push(frontOrigin[1]);
@@ -109,7 +143,7 @@ function computeViewBox() {
     ys.push(frontOrigin[1] + frontVector[1]);
   }
   if (!xs.length) {
-    viewBox = { minX: 0, maxX: 100, minY: 0, maxY: 100, scale: 1 };
+    viewBox = { minX: -50, maxX: 50, minY: -50, maxY: 50, scale: 2 };
     return;
   }
   const minX = Math.min(...xs);
@@ -125,67 +159,87 @@ function computeViewBox() {
   viewBox = { minX, maxX, minY, maxY, scale };
 }
 
-function worldToCanvas([x, y]) {
-  const cx = ((x - viewBox.minX) * viewBox.scale) + padding;
-  const cy = canvas.height - (((y - viewBox.minY) * viewBox.scale) + padding);
-  return [cx, cy];
-}
-
-function canvasToWorld(x, y) {
-  const wx = ((x - padding) / viewBox.scale) + viewBox.minX;
-  const wy = ((canvas.height - y - padding) / viewBox.scale) + viewBox.minY;
-  return [wx, wy];
-}
-
-function drawCanvas() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 2;
-  if (footprintWorld.length) {
+function drawGeometry() {
+  ctx.strokeStyle = '#cbd5f5';
+  ctx.lineWidth = 1;
+  geometryPaths.forEach((path) => {
+    if (!path.length) return;
     ctx.beginPath();
-    const [sx, sy] = worldToCanvas(footprintWorld[0]);
+    const [sx, sy] = worldToCanvas(path[0]);
     ctx.moveTo(sx, sy);
-    for (let i = 1; i < footprintWorld.length; i += 1) {
-      const [cx, cy] = worldToCanvas(footprintWorld[i]);
+    for (let i = 1; i < path.length; i += 1) {
+      const [cx, cy] = worldToCanvas(path[i]);
       ctx.lineTo(cx, cy);
     }
     ctx.stroke();
-    ctx.closePath();
+  });
+}
+
+function drawRectanglePreview() {
+  if (!rectanglePoints.length) return;
+  ctx.strokeStyle = '#ef4444';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const [sx, sy] = worldToCanvas(rectanglePoints[0]);
+  ctx.moveTo(sx, sy);
+  for (let i = 1; i < rectanglePoints.length; i += 1) {
+    const [cx, cy] = worldToCanvas(rectanglePoints[i]);
+    ctx.lineTo(cx, cy);
   }
-  ctx.fillStyle = '#2563eb';
-  footprintWorld.forEach((point) => {
-    const [cx, cy] = worldToCanvas(point);
+  ctx.stroke();
+  ctx.fillStyle = '#ef4444';
+  rectanglePoints.forEach((pt) => {
+    const [cx, cy] = worldToCanvas(pt);
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
     ctx.fill();
   });
+}
 
-  if (frontOrigin && frontVector) {
-    const start = worldToCanvas(frontOrigin);
-    const length = Math.hypot(frontVector[0], frontVector[1]) || 1;
-    const diag = Math.hypot(viewBox.maxX - viewBox.minX, viewBox.maxY - viewBox.minY) || 1;
-    const scaleFactor = (diag * 0.3) / length;
-    const endWorld = [
-      frontOrigin[0] + frontVector[0] * scaleFactor,
-      frontOrigin[1] + frontVector[1] * scaleFactor,
-    ];
-    const end = worldToCanvas(endWorld);
-    ctx.strokeStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.moveTo(start[0], start[1]);
-    ctx.lineTo(end[0], end[1]);
-    ctx.stroke();
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(start[0], start[1], 4, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (frontOrigin) {
-    const [cx, cy] = worldToCanvas(frontOrigin);
-    ctx.fillStyle = '#dc2626';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-    ctx.fill();
+function drawFootprint() {
+  if (!footprintWorld.length) return;
+  ctx.strokeStyle = '#15803d';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const [sx, sy] = worldToCanvas(footprintWorld[0]);
+  ctx.moveTo(sx, sy);
+  for (let i = 1; i < footprintWorld.length; i += 1) {
+    const [cx, cy] = worldToCanvas(footprintWorld[i]);
+    ctx.lineTo(cx, cy);
   }
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawFrontVector() {
+  if (!frontOrigin || !frontVector) return;
+  ctx.strokeStyle = '#dc2626';
+  ctx.lineWidth = 2;
+  const start = worldToCanvas(frontOrigin);
+  const length = Math.hypot(frontVector[0], frontVector[1]) || 1;
+  const diag = Math.hypot(viewBox.maxX - viewBox.minX, viewBox.maxY - viewBox.minY) || 1;
+  const scaleFactor = (diag * 0.3) / length;
+  const endWorld = [
+    frontOrigin[0] + frontVector[0] * scaleFactor,
+    frontOrigin[1] + frontVector[1] * scaleFactor,
+  ];
+  const end = worldToCanvas(endWorld);
+  ctx.beginPath();
+  ctx.moveTo(start[0], start[1]);
+  ctx.lineTo(end[0], end[1]);
+  ctx.stroke();
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.arc(start[0], start[1], 4, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawGeometry();
+  drawRectanglePreview();
+  drawFootprint();
+  drawFrontVector();
 }
 
 function updateSummaries() {
@@ -205,19 +259,12 @@ canvas.addEventListener('click', (event) => {
   const y = event.clientY - rect.top;
   const worldPoint = canvasToWorld(x, y);
   if (captureMode === 'footprint') {
-    footprintWorld.push(worldPoint);
+    if (rectanglePoints.length >= 3) rectanglePoints = [];
+    rectanglePoints.push(worldPoint);
   } else {
-    if (frontStage === 0) {
-      frontOrigin = worldPoint;
-      frontVector = null;
-      frontStage = 1;
-    } else {
-      frontVector = [worldPoint[0] - frontOrigin[0], worldPoint[1] - frontOrigin[1]];
-      frontStage = 0;
-    }
+    if (frontPoints.length >= 2) frontPoints = [];
+    frontPoints.push(worldPoint);
   }
-  computeViewBox();
-  updateSummaries();
   drawCanvas();
 });
 
@@ -230,34 +277,62 @@ frontModeBtn.addEventListener('click', () => {
   statusText.textContent = 'Front mode active.';
 });
 clearCanvasBtn.addEventListener('click', () => {
-  footprintWorld = [];
+  rectanglePoints = [];
+  frontPoints = [];
   frontOrigin = null;
   frontVector = null;
-  frontStage = 0;
-  computeViewBox();
+  footprintWorld = [];
   drawCanvas();
   updateSummaries();
 });
-applyCaptureBtn.addEventListener('click', () => {
-  if (footprintWorld.length < 3) {
-    alert('Add at least three footprint points.');
+applyCaptureBtn.addEventListener('click', async () => {
+  if (!currentFilename) {
+    alert('Select a DXF file first.');
     return;
   }
-  if (!frontVector) {
-    alert('Add two frontage points.');
+  if (rectanglePoints.length < 3) {
+    alert('Select three points (A,B,C) for the rectangle.');
     return;
   }
-  statusText.textContent = 'Footprint/front captured.';
-  captureModal.classList.add('hidden');
+  if (frontPoints.length < 2) {
+    alert('Select two frontage points.');
+    return;
+  }
+  try {
+    const resp = await fetch(`/files/${encodeURIComponent(currentFilename)}/shrinkwrap`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rectangle_points: rectanglePoints,
+        front_points: frontPoints,
+      }),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    footprintWorld = data.footprint_points || [];
+    frontOrigin = data.front_origin || null;
+    frontVector = data.front_direction || null;
+    rectanglePoints = [];
+    frontPoints = [];
+    recomputeViewBox();
+    drawCanvas();
+    updateSummaries();
+    captureModal.classList.add('hidden');
+    statusText.textContent = 'Shrink-wrap captured.';
+  } catch (err) {
+    statusText.textContent = `Shrink-wrap failed: ${err}`;
+  }
 });
+
 openCaptureBtn.addEventListener('click', async () => {
   const option = dxfSelect.options[dxfSelect.selectedIndex];
   if (!option || !option.dataset.filename) {
     alert('Select a DXF file first.');
     return;
   }
+  currentFilename = option.dataset.filename;
   try {
-    await loadPreview(option.dataset.filename);
+    await loadGeometry(currentFilename);
     captureModal.classList.remove('hidden');
   } catch (err) {
     statusText.textContent = `Preview failed: ${err}`;
@@ -267,20 +342,20 @@ closeCaptureBtn.addEventListener('click', () => {
   captureModal.classList.add('hidden');
 });
 window.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') {
-    captureModal.classList.add('hidden');
-  }
+  if (event.key === 'Escape') captureModal.classList.add('hidden');
 });
 
-async function loadPreview(filename) {
-  const resp = await fetch(`/files/${encodeURIComponent(filename)}/preview`);
+async function loadGeometry(filename) {
+  const resp = await fetch(`/files/${encodeURIComponent(filename)}/geometry`);
   if (!resp.ok) throw new Error(await resp.text());
   const data = await resp.json();
-  footprintWorld = data.footprint_points || [];
-  frontOrigin = data.front_origin || null;
-  frontVector = data.front_direction || null;
-  frontStage = 0;
-  computeViewBox();
+  geometryPaths = data.paths || [];
+  rectanglePoints = [];
+  frontPoints = [];
+  footprintWorld = [];
+  frontOrigin = null;
+  frontVector = null;
+  recomputeViewBox();
   drawCanvas();
   updateSummaries();
 }
@@ -293,12 +368,8 @@ async function handleJob(event) {
     alert('Select a remote DXF file.');
     return;
   }
-  if (footprintWorld.length < 3) {
-    alert('Capture the footprint points.');
-    return;
-  }
-  if (!frontVector) {
-    alert('Capture the front direction.');
+  if (footprintWorld.length < 3 || !frontVector) {
+    alert('Capture the footprint + front direction first.');
     return;
   }
   const payload = {
@@ -312,8 +383,8 @@ async function handleJob(event) {
     },
     footprint_points: footprintWorld.map(([x, y]) => [Number(x.toFixed(3)), Number(y.toFixed(3))]),
   };
-  const length = Math.hypot(frontVector[0], frontVector[1]) || 1;
-  payload.front_direction = frontVector.map((n) => Number((n / length).toFixed(4)));
+  const norm = Math.hypot(frontVector[0], frontVector[1]) || 1;
+  payload.front_direction = frontVector.map((n) => Number((n / norm).toFixed(4)));
 
   statusText.textContent = 'Starting crawl…';
   try {
@@ -324,26 +395,11 @@ async function handleJob(event) {
     });
     if (!resp.ok) throw new Error(await resp.text());
     const job = await resp.json();
-    statusText.textContent = `Job ${job.id} queued.`;
     resultBox.textContent = JSON.stringify(job, null, 2);
+    statusText.textContent = `Job ${job.id} queued.`;
     pollJob(job.id);
   } catch (err) {
     statusText.textContent = `Job request failed: ${err}`;
-  }
-}
-
-async function confirmDelete(filename) {
-  if (!window.confirm(`Delete ${filename}?`)) return;
-  statusText.textContent = `Deleting ${filename}…`;
-  try {
-    const resp = await fetch(`/files/${encodeURIComponent(filename)}`, {
-      method: 'DELETE',
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    await refreshFiles();
-    statusText.textContent = `Deleted ${filename}.`;
-  } catch (err) {
-    statusText.textContent = `Delete failed: ${err}`;
   }
 }
 
@@ -366,14 +422,10 @@ async function pollJob(jobId) {
 refreshBtn.addEventListener('click', refreshFiles);
 uploadForm.addEventListener('submit', handleUpload);
 jobForm.addEventListener('submit', handleJob);
-footprintModeBtn.addEventListener('click', () => {
-  captureMode = 'footprint';
-});
-frontModeBtn.addEventListener('click', () => {
-  captureMode = 'front';
-});
+footprintModeBtn.addEventListener('click', () => { captureMode = 'footprint'; });
+frontModeBtn.addEventListener('click', () => { captureMode = 'front'; });
 
 refreshFiles();
-computeViewBox();
+recomputeViewBox();
 drawCanvas();
 updateSummaries();

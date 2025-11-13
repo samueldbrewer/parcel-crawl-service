@@ -85,6 +85,23 @@ Delete a stored asset (removes it from `/data`):
 curl -X DELETE https://landlens.up.railway.app/files/<filename>
 ```
 
+Fetch raw DXF polylines for custom previews:
+
+```bash
+curl -s https://landlens.up.railway.app/files/<filename>/geometry | jq
+```
+
+Run shrink-wrap remotely from client-provided points:
+
+```bash
+curl -s -X POST https://landlens.up.railway.app/files/<filename>/shrinkwrap \
+  -H "Content-Type: application/json" \
+  -d '{
+        "rectangle_points": [[0,0],[30,0],[0,20]],
+        "front_points": [[5,5],[10,5]]
+      }' | jq
+```
+
 ## Environment variables
 
 | Variable | Purpose |
@@ -144,10 +161,10 @@ Examples:
 
 1. Select the DXF locally and click **Capture Footprint** to pick the bounding box + frontage direction.
 2. Refresh the **Remote Files** list to see everything already staged on the server.
-3. Click **Upload DXF** (or pick an existing file from the list). Use the capture canvas (either locally
-   or from the web UI) to plot the shrink-wrap points, switch to front mode to pick two frontage points,
-   then click **Start Crawl** to POST the job with those inputs. The response panel shows the job ID and
-   updates as the job runs.
+3. Click **Upload DXF** (or pick an existing file). The capture modal renders the DXF geometry via
+   `/files/<name>/geometry`; choose three rectangle points and two frontage points, apply shrink-wrap
+   (the UI calls `/files/<name>/shrinkwrap`), then submit the crawl. The response panel shows the job ID
+   and updates as the job runs.
 
 Run it with `python3 remote_client_gui.py` (requires the same dependencies as the crawler). Configure the
 API base URL if you’re targeting a different Railway environment.
