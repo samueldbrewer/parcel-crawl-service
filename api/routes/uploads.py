@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from starlette.requests import Request
 
 from api import models
+from parcel_crawl_demo_v4 import prepare_footprint
 
 UPLOAD_ROOT = Path(os.getenv("DXF_UPLOAD_ROOT", "/data")).resolve()
 router = APIRouter()
@@ -148,6 +149,39 @@ async def download_uploaded_file(filename: str) -> FileResponse:
         filename=target.name,
         media_type="application/octet-stream",
     )
+
+
+@router.get("/{filename}/preview")
+async def preview_footprint(filename: str) -> dict[str, object]:
+    target = (UPLOAD_ROOT / filename).resolve()
+    try:
+        target.relative_to(UPLOAD_ROOT)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found.") from exc
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+    try:
+        profile, front_vec = prepare_footprint(
+            target,
+            auto_front=True,
+            front_angle=None,
+            front_vector_override=None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Failed to prepare footprint: {exc}") from exc
+    coords = list(profile.geometry.exterior.coords)
+    if coords and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    footprint_points = [[round(float(x), 3), round(float(y), 3)] for x, y in coords]
+    centroid = profile.geometry.centroid
+    if front_vec is None:
+        front_vec = (1.0, 0.0)
+    return {
+        "footprint_points": footprint_points,
+        "front_direction": [round(float(front_vec[0]), 4), round(float(front_vec[1]), 4)],
+        "front_origin": [round(float(centroid.x), 3), round(float(centroid.y), 3)],
+        "area": round(float(profile.area), 3),
+    }
 
 
 def describe_upload_target() -> dict[str, object]:
