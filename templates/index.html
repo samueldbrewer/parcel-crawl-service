@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LandLens Remote Crawl</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>LandLens Remote Crawl</h1>
+      <p>Upload DXF files, capture shrink-wrap inputs locally, and start cloud crawls.</p>
+    </header>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Remote Files</h2>
+        <button id="refreshFiles" type="button">Refresh</button>
+      </div>
+      <table id="filesTable">
+        <thead>
+          <tr>
+            <th>Filename</th>
+            <th>Download</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Upload DXF</h2>
+      <form id="uploadForm">
+        <input type="file" id="uploadFile" name="file" accept=".dxf,.zip,.json" required />
+        <button type="submit">Upload</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Start Crawl</h2>
+      <form id="jobForm">
+        <label>
+          Address
+          <input type="text" name="address" required />
+        </label>
+        <label>
+          DXF File
+          <select name="dxf" id="dxfSelect" required>
+            <option value="">-- Select a file --</option>
+          </select>
+        </label>
+        <div class="grid">
+          <label>
+            Cycles
+            <input type="number" name="cycles" min="1" value="3" />
+          </label>
+          <label>
+            Buffer (m)
+            <input type="number" name="buffer" value="80" />
+          </label>
+          <label>
+            Rotation step
+            <input type="number" name="rotation" value="15" />
+          </label>
+          <label>
+            Score workers
+            <input type="number" name="score_workers" min="1" value="4" />
+          </label>
+        </div>
+        <label>
+          Footprint points (JSON array of [x, y])
+          <textarea name="footprint" rows="4" placeholder="[[0,0],[10,0],[10,5],[0,5]]"></textarea>
+        </label>
+        <label>
+          Front direction (comma separated, e.g. "1,0")
+          <input type="text" name="front" placeholder="1,0" />
+        </label>
+        <button type="submit">Start Crawl</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Status</h2>
+      <p id="statusText">Ready.</p>
+      <pre id="resultBox">{}</pre>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
