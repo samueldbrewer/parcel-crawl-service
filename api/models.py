@@ -11,6 +11,14 @@ class JobCreate(BaseModel):
         default=None,
         description="Optional overrides for crawl parameters",
     )
+    footprint_points: List[List[float]] | None = Field(
+        default=None,
+        description="Optional footprint polygon coordinates (meters)",
+    )
+    front_direction: List[float] | None = Field(
+        default=None,
+        description="Optional frontage direction vector [x, y]",
+    )
 
 
 class JobStatus(BaseModel):
@@ -26,6 +34,8 @@ class JobRecord(JobStatus):
     address: str
     dxf_url: AnyUrl
     config: Dict[str, Any] = Field(default_factory=dict)
+    footprint_points: List[List[float]] | None = None
+    front_direction: List[float] | None = None
 
 
 class FileUploadResponse(BaseModel):

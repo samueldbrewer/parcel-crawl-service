@@ -17,13 +17,21 @@ JOBS: dict[str, models.JobRecord] = {}
 @router.post("/", response_model=models.JobStatus)
 async def create_job(payload: models.JobCreate) -> models.JobStatus:
     job_id = uuid4().hex
+    config = dict(payload.config or {})
+    if payload.footprint_points:
+        config["footprint_points"] = payload.footprint_points
+    if payload.front_direction:
+        config["front_direction"] = payload.front_direction
+
     record = models.JobRecord(
         id=job_id,
         status="queued",
         created_at=datetime.utcnow(),
         address=payload.address,
         dxf_url=payload.dxf_url,
-        config=payload.config or {},
+        config=config,
+        footprint_points=payload.footprint_points,
+        front_direction=payload.front_direction,
     )
     JOBS[job_id] = record
     workers.enqueue(record)

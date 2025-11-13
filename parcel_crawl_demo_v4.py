@@ -338,6 +338,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Explicit frontage direction vector components.",
     )
+    parser.add_argument(
+        "--footprint-json",
+        type=Path,
+        default=None,
+        help="JSON file containing footprint points (when running headless)",
+    )
     parser.set_defaults(render_cycle=True, render_best=True, render_composite=True, skip_roads=False, auto_front=False)
     parser.add_argument(
         "--frontage-perpendicular",
@@ -1291,6 +1297,27 @@ def prepare_footprint(
         span=span,
     )
     return profile, front_vector
+
+
+def load_footprint_from_json(json_path: Path) -> FootprintProfile:
+    data = json.loads(json_path.read_text())
+    points = data.get("points")
+    if not points or len(points) < 3:
+        raise ValueError("Footprint JSON must provide at least three points.")
+    polygon = Polygon(points)
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
+    if polygon.is_empty:
+        raise ValueError("Footprint polygon is empty after cleaning.")
+    centroid = polygon.centroid
+    bounds = polygon.bounds
+    span = max(bounds[2] - bounds[0], bounds[3] - bounds[1])
+    return FootprintProfile(
+        geometry=polygon,
+        centroid=(centroid.x, centroid.y),
+        area=polygon.area,
+        span=span,
+    )
 
 
 def prepare_rotations(profile: FootprintProfile, rotation_step: float, full_rotation: bool) -> List[RotatedFootprint]:
@@ -3188,20 +3215,38 @@ def main() -> None:
 
     args.output_dir = args.output_dir.expanduser().resolve()
 
+    footprint_profile: Optional[FootprintProfile] = None
+    front_vector: Optional[Tuple[float, float]] = None
+    front_hint = tuple(args.front_vector) if args.front_vector else None
+
+    if args.footprint_json:
+        footprint_profile = load_footprint_from_json(args.footprint_json)
+        if front_hint is not None:
+            front_vector = front_hint
+        elif args.front_angle is not None:
+            front_vector = vector_from_angle(args.front_angle)
+        else:
+            raise RuntimeError("Provide --front-vector or --front-angle when using --footprint-json.")
+
     if address and dxf_path:
-        logging.info("Loading DXF footprint from %s", dxf_path)
-        front_hint = tuple(args.front_vector) if args.front_vector else None
-        footprint_profile, front_vector = prepare_footprint(
-            dxf_path,
-            auto_front=args.auto_front,
-            front_angle=args.front_angle,
-            front_vector_override=front_hint,
-        )
-        if front_vector is None:
-            front_vector = prompt_front_direction(footprint_profile.geometry)
+        detected_front: Optional[Tuple[float, float]] = None
+        if footprint_profile is None:
+            logging.info("Loading DXF footprint from %s", dxf_path)
+            footprint_profile, detected_front = prepare_footprint(
+                dxf_path,
+                auto_front=args.auto_front,
+                front_angle=args.front_angle,
+                front_vector_override=front_hint,
+            )
+        else:
+            logging.info("Using precomputed footprint from %s", args.footprint_json)
+
+        active_front = front_vector or front_hint or detected_front
+        if active_front is None:
+            active_front = prompt_front_direction(footprint_profile.geometry)
         if args.frontage_perpendicular:
-            front_vector = perpendicular(front_vector)
-        front_vector = normalize_vector(front_vector)
+            active_front = perpendicular(active_front)
+        front_vector = normalize_vector(active_front)
 
         rotations = prepare_rotations(footprint_profile, args.rotation_step, args.full_rotation)
         logging.info("Prepared %d rotation samples.", len(rotations))

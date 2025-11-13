@@ -76,7 +76,7 @@ def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
     output_dir = workspace / "outputs"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    command = build_command(job, dxf_path, output_dir)
+    command = build_command(job, dxf_path, output_dir, workspace)
     log_path = workspace / "crawl.log"
     exit_code = execute(command, log_path)
 
@@ -131,7 +131,7 @@ def download_dxf(url: str, dest: Path) -> None:
         raise JobExecutionError("Failed to download DXF.", {"url": url, "error": str(exc)}) from exc
 
 
-def build_command(job: Dict[str, Any], dxf_path: Path, output_dir: Path) -> List[str]:
+def build_command(job: Dict[str, Any], dxf_path: Path, output_dir: Path, workspace: Path) -> List[str]:
     if not SCRIPT_PATH.exists():
         raise JobExecutionError("parcel_crawl_demo_v4.py is missing inside the image.", {"script_path": str(SCRIPT_PATH)})
 
@@ -180,11 +180,17 @@ def build_command(job: Dict[str, Any], dxf_path: Path, output_dir: Path) -> List
     if config.get("front_angle") is not None:
         command += ["--front-angle", str(config["front_angle"])]
 
-    front_vector = config.get("front_vector")
-    if front_vector:
-        if not isinstance(front_vector, (list, tuple)) or len(front_vector) != 2:
-            raise JobExecutionError("front_vector config must be a 2-element list.", {"front_vector": front_vector})
-        command += ["--front-vector", str(front_vector[0]), str(front_vector[1])]
+    direction = config.get("front_direction") or config.get("front_vector")
+    if direction:
+        if not isinstance(direction, (list, tuple)) or len(direction) != 2:
+            raise JobExecutionError("front_direction config must be a 2-element list.", {"front_direction": direction})
+        command += ["--front-vector", str(direction[0]), str(direction[1])]
+
+    footprint_points = config.get("footprint_points")
+    if footprint_points:
+        footprint_json = workspace / "footprint.json"
+        footprint_json.write_text(json.dumps({"points": footprint_points}))
+        command += ["--footprint-json", str(footprint_json)]
 
     for key, flag in NEGATED_FLAGS.items():
         if key in config and config[key] is False:

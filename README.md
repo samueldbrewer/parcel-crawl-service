@@ -67,6 +67,18 @@ with `DXF_UPLOAD_ROOT` if your volume is mounted somewhere else. The uploader au
 can upload compressed DXFs. Set `UPLOAD_TIMEOUT` (default 900 seconds) if you need more time for larger
 files to stream.
 
+List everything currently staged on the volume:
+
+```bash
+curl -s https://landlens.up.railway.app/files | jq
+```
+
+Download any stored artifact via the public link:
+
+```bash
+curl -O https://landlens.up.railway.app/files/<filename>
+```
+
 ## Environment variables
 
 | Variable | Purpose |
@@ -78,6 +90,7 @@ files to stream.
 | `JOB_STORAGE_ROOT` | Root directory for job workspaces (defaults to `storage/jobs`). |
 | `DXF_DOWNLOAD_TIMEOUT` | DXF download timeout in seconds (default 120). |
 | `DXF_UPLOAD_ROOT` | Directory where `/files` uploads will be stored (default `/data`). |
+| `UPLOAD_TIMEOUT` | Client-side upload timeout used by `remote_client_gui.py` (default 900 seconds). |
 
 ## Storage layout
 
@@ -115,6 +128,20 @@ Examples:
 - `score_workers`, `rotation_step`, etc. map directly to their CLI equivalents.
 - If `auto_front` isn’t provided, the worker forces `--auto-front` so the crawl can run headlessly.
 - Provide `front_angle` or `front_vector` to override the auto-detected frontage.
+- When calling `/jobs`, you can now supply `footprint_points` (list of `[x, y]`) and `front_direction`
+  (two floats) to reuse the footprint captured locally. These become `--footprint-json` and
+  `--front-vector` when the worker launches the crawler.
+
+### Remote GUI workflow
+
+`remote_client_gui.py` is a lightweight desktop helper that mirrors the classic shrink-wrap flow:
+
+1. Select the DXF locally and click **Capture Footprint** to pick the bounding box + frontage direction.
+2. Click **Upload & Start Crawl** to POST the DXF to `/files`, then create a `/jobs` request with the
+   captured points. The response shows the job ID and the API’s JSON payload for easy debugging.
+
+Run it with `python3 remote_client_gui.py` (requires the same dependencies as the crawler). Configure the
+API base URL if you’re targeting a different Railway environment.
 
 ## Deployment notes
 
