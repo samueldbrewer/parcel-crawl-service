@@ -7,6 +7,7 @@ const dxfSelect = document.getElementById('dxfSelect');
 const statusText = document.getElementById('statusText');
 const resultBox = document.getElementById('resultBox');
 
+const captureModal = document.getElementById('captureModal');
 const canvas = document.getElementById('captureCanvas');
 const ctx = canvas.getContext('2d');
 const footprintSummary = document.getElementById('footprintSummary');
@@ -14,6 +15,9 @@ const frontSummary = document.getElementById('frontSummary');
 const footprintModeBtn = document.getElementById('footprintMode');
 const frontModeBtn = document.getElementById('frontMode');
 const clearCanvasBtn = document.getElementById('clearCanvas');
+const applyCaptureBtn = document.getElementById('applyCapture');
+const openCaptureBtn = document.getElementById('openCapture');
+const closeCaptureBtn = document.getElementById('closeCapture');
 
 let pollTimer = null;
 let footprintPoints = [];
@@ -177,6 +181,14 @@ function drawCanvas() {
   });
 }
 
+function openModal() {
+  captureModal.classList.remove('hidden');
+}
+
+function closeModal() {
+  captureModal.classList.add('hidden');
+}
+
 function updateSummaries() {
   footprintSummary.textContent = footprintPoints.length.toString();
   if (frontPoints.length === 2) {
@@ -217,6 +229,30 @@ clearCanvasBtn.addEventListener('click', () => {
   frontPoints = [];
   drawCanvas();
   updateSummaries();
+});
+applyCaptureBtn.addEventListener('click', () => {
+  if (footprintPoints.length < 3) {
+    alert('Add at least three footprint points.');
+    return;
+  }
+  if (frontPoints.length !== 2) {
+    alert('Add two frontage points.');
+    return;
+  }
+  statusText.textContent = 'Footprint/front captured.';
+  closeModal();
+});
+openCaptureBtn.addEventListener('click', () => {
+  openModal();
+});
+closeCaptureBtn.addEventListener('click', () => {
+  closeModal();
+});
+
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    closeModal();
+  }
 });
 
 refreshBtn.addEventListener('click', refreshFiles);

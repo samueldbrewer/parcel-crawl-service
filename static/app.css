@@ -93,13 +93,55 @@ button:hover {
   gap: 12px;
 }
 
-.capture-wrapper {
+.capture-summary {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.capture-summary p {
+  margin: 0;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  width: min(90vw, 760px);
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.4);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.modal-header button {
+  font-size: 22px;
+  padding: 0 8px;
+  background: transparent;
+  color: #0f172a;
 }
 
 #captureCanvas {
+  width: 100%;
   border: 1px dashed #94a3b8;
   background: #f8fafc;
   border-radius: 6px;
@@ -107,11 +149,11 @@ button:hover {
 
 .controls {
   display: flex;
-  align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
 }
 
-.controls .summary p {
-  margin: 0;
+.controls .primary {
+  background: #059669;
 }
