@@ -54,3 +54,15 @@ class FileArtifact(BaseModel):
 
 
 FileUploadResponse.model_rebuild()
+
+
+class ShrinkwrapRequest(BaseModel):
+    rectangle_points: List[List[float]] = Field(..., min_length=3)
+    front_points: List[List[float]] = Field(..., min_length=2, max_length=2)
+
+
+class ShrinkwrapResponse(BaseModel):
+    footprint_points: List[List[float]]
+    front_direction: List[float]
+    front_origin: List[float]
+    area: float

@@ -10,15 +10,44 @@ from urllib.parse import quote
 from uuid import uuid4
 from zipfile import BadZipFile, ZipFile
 
+import numpy as np
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.requests import Request
 
 from api import models
-from parcel_crawl_demo_v4 import prepare_footprint
+from parcel_crawl_demo_v4 import (
+    calculate_unit_scale,
+    load_dxf_polygons,
+    normalize_lines,
+    normalize_paths,
+    prepare_footprint,
+    shrinkwrap_polygon,
+)
+from shapely.geometry import Polygon
 
 UPLOAD_ROOT = Path(os.getenv("DXF_UPLOAD_ROOT", "/data")).resolve()
 router = APIRouter()
+
+
+def _load_dxf_context(filename: str) -> dict[str, object]:
+    target = (UPLOAD_ROOT / filename).resolve()
+    try:
+        target.relative_to(UPLOAD_ROOT)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found.") from exc
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+    polygons_raw, units_code, _extents, paths_raw, lines_raw = load_dxf_polygons(target)
+    scale = calculate_unit_scale(units_code)
+    paths = normalize_paths(paths_raw, scale)
+    lines = normalize_lines(lines_raw, scale)
+    return {
+        "paths": paths,
+        "lines": lines,
+        "scale": scale,
+        "path": str(target),
+    }
 
 
 def _ensure_upload_dir() -> None:
@@ -169,20 +198,9 @@ async def delete_uploaded_file(filename: str) -> dict[str, object]:
 
 @router.get("/{filename}/preview")
 async def preview_footprint(filename: str) -> dict[str, object]:
-    target = (UPLOAD_ROOT / filename).resolve()
+    ctx = _load_dxf_context(filename)
     try:
-        target.relative_to(UPLOAD_ROOT)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="File not found.") from exc
-    if not target.exists():
-        raise HTTPException(status_code=404, detail="File not found.")
-    try:
-        profile, front_vec = prepare_footprint(
-            target,
-            auto_front=True,
-            front_angle=None,
-            front_vector_override=None,
-        )
+        profile, front_vec = prepare_footprint(Path(ctx["path"]))
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Failed to prepare footprint: {exc}") from exc
     coords = list(profile.geometry.exterior.coords)
@@ -198,6 +216,37 @@ async def preview_footprint(filename: str) -> dict[str, object]:
         "front_origin": [round(float(centroid.x), 3), round(float(centroid.y), 3)],
         "area": round(float(profile.area), 3),
     }
+
+
+@router.get("/{filename}/geometry")
+async def geometry_preview(filename: str) -> dict[str, object]:
+    ctx = _load_dxf_context(filename)
+    return {
+        "paths": ctx["paths"],
+    }
+
+
+@router.post("/{filename}/shrinkwrap", response_model=models.ShrinkwrapResponse)
+async def shrinkwrap_from_selection(filename: str, payload: models.ShrinkwrapRequest) -> models.ShrinkwrapResponse:
+    ctx = _load_dxf_context(filename)
+    rect = _build_rectangle(payload.rectangle_points)
+    shrinked = shrinkwrap_polygon(rect, ctx["lines"])
+    if shrinked.is_empty:
+        raise HTTPException(status_code=400, detail="Shrink-wrap produced empty polygon.")
+    coords = list(shrinked.exterior.coords)
+    if coords and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    footprint_points = [[round(float(x), 3), round(float(y), 3)] for x, y in coords]
+    front_origin = payload.front_points[0]
+    front_dir = [payload.front_points[1][0] - front_origin[0], payload.front_points[1][1] - front_origin[1]]
+    norm = float(np.linalg.norm(front_dir)) or 1.0
+    front_direction = [round(front_dir[0] / norm, 4), round(front_dir[1] / norm, 4)]
+    return models.ShrinkwrapResponse(
+        footprint_points=footprint_points,
+        front_direction=front_direction,
+        front_origin=[round(front_origin[0], 3), round(front_origin[1], 3)],
+        area=round(float(shrinked.area), 3),
+    )
 
 
 def describe_upload_target() -> dict[str, object]:
@@ -238,6 +287,31 @@ def _maybe_extract_archive(path: Path, request: Request) -> List[models.FileArti
         logging.warning("Failed to extract zip %s: %s", path, exc)
 
     return artifacts
+
+
+def _build_rectangle(points: List[List[float]]) -> Polygon:
+    if len(points) < 3:
+        raise HTTPException(status_code=400, detail="Rectangle requires three points.")
+    A = np.array(points[0], dtype=float)
+    B = np.array(points[1], dtype=float)
+    C = np.array(points[2], dtype=float)
+    width_vec = B - A
+    width = np.linalg.norm(width_vec)
+    if width <= 1e-6:
+        raise HTTPException(status_code=400, detail="Width vector too small.")
+    width_unit = width_vec / width
+    height_vec = C - A
+    height_proj = height_vec - np.dot(height_vec, width_unit) * width_unit
+    height = np.linalg.norm(height_proj)
+    if height <= 1e-6:
+        raise HTTPException(status_code=400, detail="Height vector too small.")
+    height_unit = height_proj / height
+    corner_A = A
+    corner_B = A + width_unit * width
+    corner_C = corner_B + height_unit * height
+    corner_D = A + height_unit * height
+    polygon_pts = [tuple(corner_A), tuple(corner_B), tuple(corner_C), tuple(corner_D)]
+    return Polygon(polygon_pts)
 
 
 def _log_upload_start(request: Request, file: UploadFile) -> None:
