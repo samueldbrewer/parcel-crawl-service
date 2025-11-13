@@ -112,6 +112,23 @@ async def _handle_upload(request: Request, file: UploadFile, filename: Optional[
     return response
 
 
+@router.get("/", response_model=List[models.FileArtifact])
+async def list_uploaded_files(request: Request) -> List[models.FileArtifact]:
+    _ensure_upload_dir()
+    artifacts: List[models.FileArtifact] = []
+    for entry in sorted(UPLOAD_ROOT.iterdir()):
+        if entry.is_file():
+            artifacts.append(
+                models.FileArtifact(
+                    filename=entry.name,
+                    stored_path=str(entry),
+                    file_url=_build_file_url(entry),
+                    download_url=_build_download_url(request, entry),
+                )
+            )
+    return artifacts
+
+
 @router.get("/{filename}", response_class=FileResponse, name="download_uploaded_file")
 async def download_uploaded_file(filename: str) -> FileResponse:
     target = (UPLOAD_ROOT / filename).resolve()
