@@ -129,6 +129,11 @@ async def list_uploaded_files(request: Request) -> List[models.FileArtifact]:
     return artifacts
 
 
+@router.get("", response_model=List[models.FileArtifact])
+async def list_uploaded_files_no_slash(request: Request) -> List[models.FileArtifact]:
+    return await list_uploaded_files(request)
+
+
 @router.get("/{filename}", response_class=FileResponse, name="download_uploaded_file")
 async def download_uploaded_file(filename: str) -> FileResponse:
     target = (UPLOAD_ROOT / filename).resolve()
