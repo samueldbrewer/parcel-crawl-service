@@ -137,8 +137,9 @@ Examples:
 `remote_client_gui.py` is a lightweight desktop helper that mirrors the classic shrink-wrap flow:
 
 1. Select the DXF locally and click **Capture Footprint** to pick the bounding box + frontage direction.
-2. Click **Upload & Start Crawl** to POST the DXF to `/files`, then create a `/jobs` request with the
-   captured points. The response shows the job ID and the API’s JSON payload for easy debugging.
+2. Refresh the **Remote Files** list to see everything already staged on the server.
+3. Click **Upload DXF** (or pick an existing file from the list), then **Start Crawl** to POST the job
+   with the captured footprint/front vector. The response shows the job ID and updates as the job runs.
 
 Run it with `python3 remote_client_gui.py` (requires the same dependencies as the crawler). Configure the
 API base URL if you’re targeting a different Railway environment.
