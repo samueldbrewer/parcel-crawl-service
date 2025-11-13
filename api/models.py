@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import AnyUrl, BaseModel, Field
 
@@ -33,3 +33,14 @@ class FileUploadResponse(BaseModel):
     stored_path: str
     file_url: str
     download_url: Optional[str] = None
+    extracted_files: List["FileArtifact"] = Field(default_factory=list)
+
+
+class FileArtifact(BaseModel):
+    filename: str
+    stored_path: str
+    file_url: str
+    download_url: str
+
+
+FileUploadResponse.model_rebuild()

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
+import shutil
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 from urllib.parse import quote
 from uuid import uuid4
-import logging
+from zipfile import BadZipFile, ZipFile
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -50,6 +52,14 @@ def _reserve_path(name: str) -> Path:
         counter += 1
 
 
+def _build_file_url(path: Path) -> str:
+    return f"file://{quote(str(path), safe='/')}"
+
+
+def _build_download_url(request: Request, path: Path) -> str:
+    return str(request.url_for("download_uploaded_file", filename=path.name))
+
+
 @router.post("/", response_model=models.FileUploadResponse)
 async def upload_dxf(
     request: Request,
@@ -87,14 +97,16 @@ async def _handle_upload(request: Request, file: UploadFile, filename: Optional[
     finally:
         await file.close()
 
-    file_url = f"file://{quote(str(destination), safe='/')}"
-    download_url = str(request.url_for("download_uploaded_file", filename=destination.name))
+    file_url = _build_file_url(destination)
+    download_url = _build_download_url(request, destination)
+    extracted = _maybe_extract_archive(destination, request)
 
     response = models.FileUploadResponse(
         filename=destination.name,
         stored_path=str(destination),
         file_url=file_url,
         download_url=download_url,
+        extracted_files=extracted,
     )
     _log_upload_complete(request, destination, response)
     return response
@@ -126,6 +138,36 @@ def describe_upload_target() -> dict[str, object]:
     }
 
 
+def _maybe_extract_archive(path: Path, request: Request) -> List[models.FileArtifact]:
+    suffix = path.suffix.lower()
+    artifacts: List[models.FileArtifact] = []
+    if suffix != ".zip":
+        return artifacts
+
+    try:
+        with ZipFile(path) as archive:
+            for member in archive.infolist():
+                if member.is_dir():
+                    continue
+                member_name = _sanitize_filename(member.filename)
+                target = _reserve_path(member_name)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with archive.open(member) as source, target.open("wb") as destination:
+                    shutil.copyfileobj(source, destination)
+                artifacts.append(
+                    models.FileArtifact(
+                        filename=target.name,
+                        stored_path=str(target),
+                        file_url=_build_file_url(target),
+                        download_url=_build_download_url(request, target),
+                    )
+                )
+    except BadZipFile as exc:
+        logging.warning("Failed to extract zip %s: %s", path, exc)
+
+    return artifacts
+
+
 def _log_upload_start(request: Request, file: UploadFile) -> None:
     client = request.client.host if request.client else "unknown"
     headers = dict(request.headers)
@@ -140,8 +182,9 @@ def _log_upload_start(request: Request, file: UploadFile) -> None:
 def _log_upload_complete(request: Request, destination: Path, payload: models.FileUploadResponse) -> None:
     client = request.client.host if request.client else "unknown"
     logging.info(
-        "Upload completed from %s | stored=%s | file_url=%s",
+        "Upload completed from %s | stored=%s | file_url=%s | extracted=%d",
         client,
         destination,
         payload.file_url,
+        len(payload.extracted_files),
     )
