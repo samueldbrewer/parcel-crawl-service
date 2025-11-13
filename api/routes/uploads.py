@@ -151,6 +151,22 @@ async def download_uploaded_file(filename: str) -> FileResponse:
     )
 
 
+@router.delete("/{filename}")
+async def delete_uploaded_file(filename: str) -> dict[str, object]:
+    target = (UPLOAD_ROOT / filename).resolve()
+    try:
+        target.relative_to(UPLOAD_ROOT)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found.") from exc
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+    try:
+        target.unlink()
+    except OSError as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {exc}") from exc
+    return {"deleted": True, "filename": filename}
+
+
 @router.get("/{filename}/preview")
 async def preview_footprint(filename: str) -> dict[str, object]:
     target = (UPLOAD_ROOT / filename).resolve()

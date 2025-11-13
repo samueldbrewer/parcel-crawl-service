@@ -67,6 +67,14 @@ button:hover {
   background: #1d4ed8;
 }
 
+button.danger {
+  background: #dc2626;
+}
+
+button.danger:hover {
+  background: #b91c1c;
+}
+
 #filesTable {
   width: 100%;
   border-collapse: collapse;

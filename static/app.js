@@ -48,8 +48,15 @@ async function refreshFiles() {
       link.rel = 'noopener noreferrer';
       link.textContent = 'Download';
       linkCell.appendChild(link);
+      const deleteCell = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Delete';
+      delBtn.className = 'danger';
+      delBtn.addEventListener('click', () => confirmDelete(file.filename));
+      deleteCell.appendChild(delBtn);
       row.appendChild(nameCell);
       row.appendChild(linkCell);
+      row.appendChild(deleteCell);
       filesTableBody.appendChild(row);
 
       const opt = document.createElement('option');
@@ -322,6 +329,21 @@ async function handleJob(event) {
     pollJob(job.id);
   } catch (err) {
     statusText.textContent = `Job request failed: ${err}`;
+  }
+}
+
+async function confirmDelete(filename) {
+  if (!window.confirm(`Delete ${filename}?`)) return;
+  statusText.textContent = `Deleting ${filename}…`;
+  try {
+    const resp = await fetch(`/files/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    await refreshFiles();
+    statusText.textContent = `Deleted ${filename}.`;
+  } catch (err) {
+    statusText.textContent = `Delete failed: ${err}`;
   }
 }
 

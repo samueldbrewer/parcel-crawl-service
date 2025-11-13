@@ -79,6 +79,12 @@ Download any stored artifact via the public link:
 curl -O https://landlens.up.railway.app/files/<filename>
 ```
 
+Delete a stored asset (removes it from `/data`):
+
+```bash
+curl -X DELETE https://landlens.up.railway.app/files/<filename>
+```
+
 ## Environment variables
 
 | Variable | Purpose |
