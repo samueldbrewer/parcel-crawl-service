@@ -32,3 +32,4 @@ class FileUploadResponse(BaseModel):
     filename: str
     stored_path: str
     file_url: str
+    download_url: Optional[str] = None

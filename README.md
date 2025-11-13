@@ -53,14 +53,16 @@ curl -s -X POST https://landlens.up.railway.app/files \
 # Response snippet
 {
   "filename": "P14_LE_BASE_FOOTPRINT.dxf",
-  "stored_path": "/data/dxf/P14_LE_BASE_FOOTPRINT.dxf",
-  "file_url": "file:///data/dxf/P14_LE_BASE_FOOTPRINT.dxf"
+  "stored_path": "/data/P14_LE_BASE_FOOTPRINT.dxf",
+  "file_url": "file:///data/P14_LE_BASE_FOOTPRINT.dxf",
+  "download_url": "https://landlens.up.railway.app/files/P14_LE_BASE_FOOTPRINT.dxf"
 }
 ```
 
 Use the returned `file_url` (e.g., `file:///data/P14_LE_BASE_FOOTPRINT.dxf`) as the `dxf_url` when
-submitting `/jobs` requests. Override the upload directory with `DXF_UPLOAD_ROOT` if your volume is mounted
-somewhere else.
+submitting `/jobs` requests. The `download_url` is a public HTTPS endpoint that streams the stored file
+back, making it easy to verify uploads or share them with other services. Override the upload directory
+with `DXF_UPLOAD_ROOT` if your volume is mounted somewhere else.
 
 ## Environment variables
 

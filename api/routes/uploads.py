@@ -9,6 +9,7 @@ from uuid import uuid4
 import logging
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from starlette.requests import Request
 
 from api import models
@@ -87,13 +88,32 @@ async def _handle_upload(request: Request, file: UploadFile, filename: Optional[
         await file.close()
 
     file_url = f"file://{quote(str(destination), safe='/')}"
+    download_url = str(request.url_for("download_uploaded_file", filename=destination.name))
+
     response = models.FileUploadResponse(
         filename=destination.name,
         stored_path=str(destination),
         file_url=file_url,
+        download_url=download_url,
     )
     _log_upload_complete(request, destination, response)
     return response
+
+
+@router.get("/{filename}", response_class=FileResponse, name="download_uploaded_file")
+async def download_uploaded_file(filename: str) -> FileResponse:
+    target = (UPLOAD_ROOT / filename).resolve()
+    try:
+        target.relative_to(UPLOAD_ROOT)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found.") from exc
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="File not found.")
+    return FileResponse(
+        target,
+        filename=target.name,
+        media_type="application/octet-stream",
+    )
 
 
 def describe_upload_target() -> dict[str, object]:
