@@ -38,6 +38,23 @@
     </section>
 
     <section class="panel">
+      <h2>Capture Footprint & Front Direction</h2>
+      <p>Click on the canvas to plot the footprint polygon (at least three points). Switch to "Front Mode" to pick two points indicating the frontage direction.</p>
+      <div class="capture-wrapper">
+        <canvas id="captureCanvas" width="520" height="320"></canvas>
+        <div class="controls">
+          <button type="button" id="footprintMode">Footprint Mode</button>
+          <button type="button" id="frontMode">Front Mode</button>
+          <button type="button" id="clearCanvas">Clear</button>
+          <div class="summary">
+            <p><strong>Footprint Points:</strong> <span id="footprintSummary">0</span></p>
+            <p><strong>Front Vector:</strong> <span id="frontSummary">None</span></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
       <h2>Start Crawl</h2>
       <form id="jobForm">
         <label>
@@ -68,14 +85,6 @@
             <input type="number" name="score_workers" min="1" value="4" />
           </label>
         </div>
-        <label>
-          Footprint points (JSON array of [x, y])
-          <textarea name="footprint" rows="4" placeholder="[[0,0],[10,0],[10,5],[0,5]]"></textarea>
-        </label>
-        <label>
-          Front direction (comma separated, e.g. "1,0")
-          <input type="text" name="front" placeholder="1,0" />
-        </label>
         <button type="submit">Start Crawl</button>
       </form>
     </section>

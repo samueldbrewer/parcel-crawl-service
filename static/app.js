@@ -7,7 +7,18 @@ const dxfSelect = document.getElementById('dxfSelect');
 const statusText = document.getElementById('statusText');
 const resultBox = document.getElementById('resultBox');
 
+const canvas = document.getElementById('captureCanvas');
+const ctx = canvas.getContext('2d');
+const footprintSummary = document.getElementById('footprintSummary');
+const frontSummary = document.getElementById('frontSummary');
+const footprintModeBtn = document.getElementById('footprintMode');
+const frontModeBtn = document.getElementById('frontMode');
+const clearCanvasBtn = document.getElementById('clearCanvas');
+
 let pollTimer = null;
+let footprintPoints = [];
+let frontPoints = [];
+let captureMode = 'footprint'; // or 'front'
 
 async function refreshFiles() {
   try {
@@ -71,6 +82,14 @@ async function handleJob(event) {
     alert('Select a remote DXF file.');
     return;
   }
+  if (footprintPoints.length < 3) {
+    alert('Capture at least three footprint points.');
+    return;
+  }
+  if (frontPoints.length !== 2) {
+    alert('Capture two points for the front direction.');
+    return;
+  }
   const payload = {
     address: formData.get('address'),
     dxf_url: fileUrl,
@@ -80,27 +99,14 @@ async function handleJob(event) {
       rotation_step: Number(formData.get('rotation') || 15),
       score_workers: Number(formData.get('score_workers') || 1),
     },
+    footprint_points: footprintPoints.map(([x, y]) => [Number(x.toFixed(2)), Number(y.toFixed(2))]),
   };
 
-  const footprintText = formData.get('footprint');
-  if (footprintText) {
-    try {
-      payload.footprint_points = JSON.parse(footprintText);
-    } catch (err) {
-      alert('Footprint JSON invalid.');
-      return;
-    }
-  }
-
-  const frontText = (formData.get('front') || '').trim();
-  if (frontText) {
-    const parts = frontText.split(',').map((n) => Number(n.trim()));
-    if (parts.length !== 2 || parts.some((n) => Number.isNaN(n))) {
-      alert('Front direction must be two comma-separated numbers.');
-      return;
-    }
-    payload.front_direction = parts;
-  }
+  const frontVector = [
+    frontPoints[1][0] - frontPoints[0][0],
+    frontPoints[1][1] - frontPoints[0][1],
+  ];
+  payload.front_direction = frontVector.map((n) => Number(n.toFixed(2)));
 
   statusText.textContent = 'Starting crawl…';
   try {
@@ -135,8 +141,88 @@ async function pollJob(jobId) {
   }
 }
 
+function drawCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 2;
+  if (footprintPoints.length) {
+    ctx.beginPath();
+    ctx.moveTo(footprintPoints[0][0], footprintPoints[0][1]);
+    for (let i = 1; i < footprintPoints.length; i += 1) {
+      ctx.lineTo(footprintPoints[i][0], footprintPoints[i][1]);
+    }
+    ctx.stroke();
+    ctx.closePath();
+  }
+
+  ctx.fillStyle = '#2563eb';
+  footprintPoints.forEach(([x, y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  if (frontPoints.length === 2) {
+    ctx.strokeStyle = '#dc2626';
+    ctx.beginPath();
+    ctx.moveTo(frontPoints[0][0], frontPoints[0][1]);
+    ctx.lineTo(frontPoints[1][0], frontPoints[1][1]);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#dc2626';
+  frontPoints.forEach(([x, y]) => {
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function updateSummaries() {
+  footprintSummary.textContent = footprintPoints.length.toString();
+  if (frontPoints.length === 2) {
+    const vector = [
+      (frontPoints[1][0] - frontPoints[0][0]).toFixed(1),
+      (frontPoints[1][1] - frontPoints[0][1]).toFixed(1),
+    ];
+    frontSummary.textContent = `[${vector.join(', ')}]`;
+  } else {
+    frontSummary.textContent = 'None';
+  }
+}
+
+canvas.addEventListener('click', (event) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+  if (captureMode === 'footprint') {
+    footprintPoints.push([x, y]);
+  } else if (captureMode === 'front') {
+    if (frontPoints.length === 2) frontPoints = [];
+    frontPoints.push([x, y]);
+  }
+  updateSummaries();
+  drawCanvas();
+});
+
+footprintModeBtn.addEventListener('click', () => {
+  captureMode = 'footprint';
+  statusText.textContent = 'Footprint mode active.';
+});
+frontModeBtn.addEventListener('click', () => {
+  captureMode = 'front';
+  statusText.textContent = 'Front vector mode active.';
+});
+clearCanvasBtn.addEventListener('click', () => {
+  footprintPoints = [];
+  frontPoints = [];
+  drawCanvas();
+  updateSummaries();
+});
+
 refreshBtn.addEventListener('click', refreshFiles);
 uploadForm.addEventListener('submit', handleUpload);
 jobForm.addEventListener('submit', handleJob);
 
 refreshFiles();
+drawCanvas();
+updateSummaries();

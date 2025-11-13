@@ -138,8 +138,10 @@ Examples:
 
 1. Select the DXF locally and click **Capture Footprint** to pick the bounding box + frontage direction.
 2. Refresh the **Remote Files** list to see everything already staged on the server.
-3. Click **Upload DXF** (or pick an existing file from the list), then **Start Crawl** to POST the job
-   with the captured footprint/front vector. The response shows the job ID and updates as the job runs.
+3. Click **Upload DXF** (or pick an existing file from the list). Use the capture canvas (either locally
+   or from the web UI) to plot the shrink-wrap points, switch to front mode to pick two frontage points,
+   then click **Start Crawl** to POST the job with those inputs. The response panel shows the job ID and
+   updates as the job runs.
 
 Run it with `python3 remote_client_gui.py` (requires the same dependencies as the crawler). Configure the
 API base URL if you’re targeting a different Railway environment.
