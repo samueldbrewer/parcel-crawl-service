@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 from uuid import uuid4
+import logging
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from starlette.requests import Request
 
 from api import models
 
@@ -48,7 +50,12 @@ def _reserve_path(name: str) -> Path:
 
 
 @router.post("/", response_model=models.FileUploadResponse)
-async def upload_dxf(file: UploadFile = File(...), filename: Optional[str] = None) -> models.FileUploadResponse:
+async def upload_dxf(
+    request: Request,
+    file: UploadFile = File(...),
+    filename: Optional[str] = None,
+) -> models.FileUploadResponse:
+    _log_upload_start(request, file)
     _ensure_upload_dir()
     desired_name = filename or file.filename
     safe_name = _sanitize_filename(desired_name)
@@ -67,11 +74,13 @@ async def upload_dxf(file: UploadFile = File(...), filename: Optional[str] = Non
         await file.close()
 
     file_url = f"file://{quote(str(destination), safe='/')}"
-    return models.FileUploadResponse(
+    response = models.FileUploadResponse(
         filename=destination.name,
         stored_path=str(destination),
         file_url=file_url,
     )
+    _log_upload_complete(request, destination, response)
+    return response
 
 
 def describe_upload_target() -> dict[str, object]:
@@ -82,3 +91,24 @@ def describe_upload_target() -> dict[str, object]:
         "exists": exists,
         "writable": writable,
     }
+
+
+def _log_upload_start(request: Request, file: UploadFile) -> None:
+    client = request.client.host if request.client else "unknown"
+    headers = dict(request.headers)
+    logging.info(
+        "Upload started from %s | filename=%s | content_length=%s",
+        client,
+        file.filename,
+        headers.get("content-length"),
+    )
+
+
+def _log_upload_complete(request: Request, destination: Path, payload: models.FileUploadResponse) -> None:
+    client = request.client.host if request.client else "unknown"
+    logging.info(
+        "Upload completed from %s | stored=%s | file_url=%s",
+        client,
+        destination,
+        payload.file_url,
+    )
