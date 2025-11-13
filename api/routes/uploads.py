@@ -55,6 +55,19 @@ async def upload_dxf(
     file: UploadFile = File(...),
     filename: Optional[str] = None,
 ) -> models.FileUploadResponse:
+    return await _handle_upload(request, file, filename)
+
+
+@router.post("", response_model=models.FileUploadResponse)
+async def upload_dxf_no_slash(
+    request: Request,
+    file: UploadFile = File(...),
+    filename: Optional[str] = None,
+) -> models.FileUploadResponse:
+    return await _handle_upload(request, file, filename)
+
+
+async def _handle_upload(request: Request, file: UploadFile, filename: Optional[str]) -> models.FileUploadResponse:
     _log_upload_start(request, file)
     _ensure_upload_dir()
     desired_name = filename or file.filename
