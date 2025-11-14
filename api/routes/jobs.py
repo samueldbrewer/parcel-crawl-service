@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from api import models
 from api.services import workers
@@ -71,18 +71,61 @@ async def read_job_logs(job_id: str, lines: int = 200) -> dict[str, object]:
 
 
 @router.get("/{job_id}/artifacts")
-async def read_job_artifacts(job_id: str) -> dict[str, object]:
+async def read_job_artifacts(job_id: str, request: Request) -> dict[str, object]:
     workspace = JOB_STORAGE / job_id
     output_dir = workspace / "outputs"
     if not output_dir.exists():
         raise HTTPException(status_code=404, detail="Artifacts not available yet.")
     snapshot = build_output_snapshot(output_dir)
+    artifacts = snapshot.get("artifacts", {})
+    add_download_urls(artifacts, request)
     return {
         "job_id": job_id,
-        "artifacts": snapshot.get("artifacts", {}),
+        "artifacts": artifacts,
         "cycle_summaries": snapshot.get("cycle_summaries", []),
         "output_dir": snapshot.get("output_dir"),
     }
+
+
+def add_download_urls(artifacts: dict[str, object], request: Request) -> None:
+    """Attach downloadable URLs for known artifact paths."""
+    storage_root = JOB_STORAGE.parent  # /app/storage
+    files_root = Path("/data")
+
+    def to_url(path_str: str) -> str | None:
+        path = Path(path_str)
+        try:
+            rel = path.relative_to(storage_root)
+        except ValueError:
+            # If the file lives on the mounted /data volume, expose via /files (download endpoint).
+            try:
+                rel = path.relative_to(files_root)
+                return str(request.url_for("download_uploaded_file", filename=rel.name))
+            except ValueError:
+                return None
+
+        try:
+            rel_to_workspace = rel.relative_to("jobs")
+        except ValueError:
+            rel_to_workspace = rel
+
+        target = Path("jobs") / rel_to_workspace
+        return str(request.url_for("proxy_job_file", job_path=str(target)))
+
+    def inject(obj: object):
+        if isinstance(obj, dict):
+            for key, value in obj.items():
+                if isinstance(value, str) and value.startswith("/"):
+                    url = to_url(value)
+                    if url:
+                        obj[f"{key}_url"] = url
+                else:
+                    inject(value)
+        elif isinstance(obj, list):
+            for item in obj:
+                inject(item)
+
+    inject(artifacts)
 
 
 def update_job_status(
