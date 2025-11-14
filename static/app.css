@@ -173,3 +173,26 @@ button.danger {
 button.danger:hover {
   background: #b91c1c;
 }
+
+.loading::after {
+  content: ' …';
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.2; }
+  50% { opacity: 1; }
+  100% { opacity: 0.2; }
+}
+
+#historyTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#historyTable th,
+#historyTable td {
+  padding: 6px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+}

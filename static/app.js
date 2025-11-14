@@ -3,9 +3,11 @@ const refreshBtn = document.getElementById('refreshFiles');
 const uploadForm = document.getElementById('uploadForm');
 const uploadFileInput = document.getElementById('uploadFile');
 const jobForm = document.getElementById('jobForm');
+const startButton = document.getElementById('startButton');
 const dxfSelect = document.getElementById('dxfSelect');
 const statusText = document.getElementById('statusText');
 const resultBox = document.getElementById('resultBox');
+const historyTableBody = document.querySelector('#historyTable tbody');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -22,6 +24,7 @@ const clearCanvasBtn = document.getElementById('clearCanvas');
 
 const padding = 20;
 let pollTimer = null;
+const jobHistory = new Map();
 let currentFilename = null;
 let geometryPaths = [];
 let viewBox = { minX: -50, maxX: 50, minY: -50, maxY: 50, scale: 2 };
@@ -31,6 +34,52 @@ let frontPoints = [];
 let footprintWorld = [];
 let frontOrigin = null;
 let frontVector = null;
+
+function setStatus(text, loading = false) {
+  statusText.textContent = text;
+  statusText.classList.toggle('loading', loading);
+}
+
+function readyForJob() {
+  return footprintWorld.length >= 3 && !!frontVector;
+}
+
+function updateStartButton() {
+  if (readyForJob()) {
+    startButton.disabled = false;
+    startButton.textContent = 'Start Crawl';
+  } else {
+    startButton.disabled = true;
+    startButton.textContent = 'Capture Footprint First';
+  }
+}
+
+function updateHistory(job) {
+  jobHistory.set(job.id, {
+    status: job.status,
+    updated: new Date().toLocaleTimeString(),
+  });
+  renderHistory();
+}
+
+function renderHistory() {
+  historyTableBody.innerHTML = '';
+  Array.from(jobHistory.entries())
+    .reverse()
+    .forEach(([id, info]) => {
+      const row = document.createElement('tr');
+      const idCell = document.createElement('td');
+      idCell.textContent = id;
+      const statusCell = document.createElement('td');
+      statusCell.textContent = info.status;
+      const updatedCell = document.createElement('td');
+      updatedCell.textContent = info.updated;
+      row.appendChild(idCell);
+      row.appendChild(statusCell);
+      row.appendChild(updatedCell);
+      historyTableBody.appendChild(row);
+    });
+}
 
 async function refreshFiles() {
   try {
@@ -67,9 +116,9 @@ async function refreshFiles() {
       opt.dataset.filename = file.filename;
       dxfSelect.appendChild(opt);
     });
-    statusText.textContent = `Loaded ${data.length} files.`;
+    setStatus(`Loaded ${data.length} files.`);
   } catch (err) {
-    statusText.textContent = `Failed to fetch files: ${err}`;
+    setStatus(`Failed to fetch files: ${err}`);
   }
 }
 
@@ -78,10 +127,10 @@ async function deleteFile(filename) {
   try {
     const resp = await fetch(`/files/${encodeURIComponent(filename)}`, { method: 'DELETE' });
     if (!resp.ok) throw new Error(await resp.text());
-    statusText.textContent = `Deleted ${filename}.`;
+    setStatus(`Deleted ${filename}.`);
     await refreshFiles();
   } catch (err) {
-    statusText.textContent = `Delete failed: ${err}`;
+    setStatus(`Delete failed: ${err}`);
   }
 }
 
@@ -93,19 +142,19 @@ async function handleUpload(event) {
   }
   const formData = new FormData();
   formData.append('file', uploadFileInput.files[0]);
-  statusText.textContent = 'Uploading…';
+  setStatus('Uploading…', true);
   try {
     const resp = await fetch('/files', { method: 'POST', body: formData });
     if (!resp.ok) throw new Error(await resp.text());
     const payload = await resp.json();
     resultBox.textContent = JSON.stringify(payload, null, 2);
-    statusText.textContent = `Uploaded ${payload.filename}`;
+    setStatus(`Uploaded ${payload.filename}.`, false);
     await refreshFiles();
     Array.from(dxfSelect.options).forEach((opt) => {
       if (opt.dataset.filename === payload.filename) opt.selected = true;
     });
   } catch (err) {
-    statusText.textContent = `Upload failed: ${err}`;
+    setStatus(`Upload failed: ${err}`);
   }
 }
 
@@ -273,6 +322,7 @@ function updateSummaries() {
   } else {
     frontSummary.textContent = 'None';
   }
+  updateStartButton();
 }
 
 canvas.addEventListener('click', (event) => {
@@ -294,11 +344,11 @@ canvas.addEventListener('click', (event) => {
 
 footprintModeBtn.addEventListener('click', () => {
   captureMode = 'footprint';
-  statusText.textContent = 'Footprint mode active.';
+  setStatus('Footprint mode active.');
 });
 frontModeBtn.addEventListener('click', () => {
   captureMode = 'front';
-  statusText.textContent = 'Front mode active.';
+  setStatus('Front mode active.');
 });
 clearCanvasBtn.addEventListener('click', () => {
   rectanglePoints = [];
@@ -342,9 +392,9 @@ applyCaptureBtn.addEventListener('click', async () => {
     drawCanvas();
     updateSummaries();
     captureModal.classList.add('hidden');
-    statusText.textContent = 'Shrink-wrap captured.';
+    setStatus('Shrink-wrap captured. Ready to start crawl.');
   } catch (err) {
-    statusText.textContent = `Shrink-wrap failed: ${err}`;
+    setStatus(`Shrink-wrap failed: ${err}`);
   }
 });
 
@@ -359,7 +409,7 @@ openCaptureBtn.addEventListener('click', async () => {
     await loadGeometry(currentFilename);
     captureModal.classList.remove('hidden');
   } catch (err) {
-    statusText.textContent = `Preview failed: ${err}`;
+    setStatus(`Preview failed: ${err}`);
   }
 });
 closeCaptureBtn.addEventListener('click', () => {
@@ -382,6 +432,7 @@ async function loadGeometry(filename) {
   recomputeViewBox();
   drawCanvas();
   updateSummaries();
+  updateStartButton();
 }
 
 async function handleJob(event) {
@@ -410,7 +461,7 @@ async function handleJob(event) {
   const norm = Math.hypot(frontVector[0], frontVector[1]) || 1;
   payload.front_direction = frontVector.map((n) => Number((n / norm).toFixed(4)));
 
-  statusText.textContent = 'Starting crawl…';
+  setStatus('Starting crawl…', true);
   try {
     const resp = await fetch('/jobs', {
       method: 'POST',
@@ -420,10 +471,11 @@ async function handleJob(event) {
     if (!resp.ok) throw new Error(await resp.text());
     const job = await resp.json();
     resultBox.textContent = JSON.stringify(job, null, 2);
-    statusText.textContent = `Job ${job.id} queued.`;
+    setStatus(`Job ${job.id} queued.`);
+    updateHistory(job);
     pollJob(job.id);
   } catch (err) {
-    statusText.textContent = `Job request failed: ${err}`;
+    setStatus(`Job request failed: ${err}`);
   }
 }
 
@@ -434,7 +486,8 @@ async function pollJob(jobId) {
     if (!resp.ok) throw new Error(await resp.text());
     const job = await resp.json();
     resultBox.textContent = JSON.stringify(job, null, 2);
-    statusText.textContent = `Job ${job.id}: ${job.status}`;
+    setStatus(`Job ${job.id}: ${job.status}`);
+    updateHistory(job);
     if (['queued', 'running'].includes(job.status)) {
       pollTimer = setTimeout(() => pollJob(jobId), 4000);
     }
@@ -453,3 +506,4 @@ refreshFiles();
 recomputeViewBox();
 drawCanvas();
 updateSummaries();
+updateStartButton();
