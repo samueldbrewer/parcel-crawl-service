@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 from api import models
 from api.services import workers
+from worker.run_job import JOB_STORAGE, read_log_tail
 
 router = APIRouter()
 
@@ -53,6 +54,20 @@ async def read_job(job_id: str) -> models.JobRecord:
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+
+@router.get("/{job_id}/logs")
+async def read_job_logs(job_id: str, lines: int = 200) -> dict[str, object]:
+    log_path = JOB_STORAGE / job_id / "crawl.log"
+    if not log_path.exists():
+        raise HTTPException(status_code=404, detail="Log not available yet.")
+    limit = max(1, min(lines, 2000))
+    return {
+        "job_id": job_id,
+        "lines": limit,
+        "log_tail": read_log_tail(log_path, limit),
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
 
 
 def update_job_status(

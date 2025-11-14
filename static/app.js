@@ -585,11 +585,26 @@ function renderJobDetails(job) {
   } else {
     jobDetails.appendChild(fragment);
   }
+  logTailBox.textContent = 'Loading logs…';
+  fetchJobLog(job.id);
+}
 
-  if (result.log_tail) {
-    logTailBox.textContent = result.log_tail;
-  } else {
+async function fetchJobLog(jobId) {
+  if (!jobId) {
     logTailBox.textContent = '(log tail will appear here as jobs update)';
+    return;
+  }
+  try {
+    const resp = await fetch(`/jobs/${jobId}/logs?lines=400`);
+    if (resp.status === 404) {
+      logTailBox.textContent = 'Log is not available yet.';
+      return;
+    }
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    logTailBox.textContent = data.log_tail || '(no log output yet)';
+  } catch (err) {
+    logTailBox.textContent = `Failed to load logs: ${err}`;
   }
 }
 

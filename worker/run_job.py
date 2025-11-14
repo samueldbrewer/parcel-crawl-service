@@ -65,12 +65,14 @@ class JobExecutionError(RuntimeError):
 def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
     """Execute the crawl script for the supplied job payload."""
     job_id = job["id"]
+    LOG.info("Job %s starting. Preparing workspace.", job_id)
     workspace = JOB_STORAGE / job_id
     if workspace.exists():
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
 
     dxf_path = workspace / "footprint.dxf"
+    LOG.info("Job %s downloading DXF to %s", job_id, dxf_path)
     download_dxf(job["dxf_url"], dxf_path)
 
     output_dir = workspace / "outputs"
@@ -78,6 +80,7 @@ def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
 
     command = build_command(job, dxf_path, output_dir, workspace)
     log_path = workspace / "crawl.log"
+    LOG.info("Job %s launching crawler: %s", job_id, format_command(command))
     exit_code = execute(command, log_path)
 
     if exit_code != 0:
@@ -88,6 +91,7 @@ def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
         }
         raise JobExecutionError(f"Crawler exited with status {exit_code}.", context)
 
+    LOG.info("Job %s completed successfully. Collecting summary.", job_id)
     result = collect_summary(output_dir)
     result.update(
         {
@@ -111,6 +115,7 @@ def download_dxf(url: str, dest: Path) -> None:
         src = Path(url[7:])
         if not src.exists():
             raise JobExecutionError("DXF path does not exist.", {"path": url})
+        LOG.info("Copying DXF from %s", src)
         shutil.copyfile(src, dest)
         return
 
@@ -118,6 +123,7 @@ def download_dxf(url: str, dest: Path) -> None:
         src = Path(url).expanduser()
         if not src.exists():
             raise JobExecutionError("DXF path does not exist.", {"path": str(src)})
+        LOG.info("Copying DXF from %s", src)
         shutil.copyfile(src, dest)
         return
 
@@ -275,11 +281,12 @@ def _summarize_cycle(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def read_log_tail(log_path: Path) -> str:
+def read_log_tail(log_path: Path, limit: int | None = None) -> str:
     if not log_path.exists():
         return ""
+    max_lines = limit or LOG_TAIL_LINES
     with log_path.open("r", encoding="utf-8", errors="ignore") as stream:
-        tail = deque(stream, maxlen=LOG_TAIL_LINES)
+        tail = deque(stream, maxlen=max_lines)
     return "".join(tail)
 
 
