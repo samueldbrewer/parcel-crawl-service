@@ -434,7 +434,7 @@ async function loadGeometry(filename) {
   frontOrigin = null;
   frontVector = null;
   shrinkwrapReady = false;
-  recomputeViewBox()();
+  recomputeViewBox();
   drawCanvas();
   updateSummaries();
   updateStartButton();
