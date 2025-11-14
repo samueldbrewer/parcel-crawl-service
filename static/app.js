@@ -177,7 +177,7 @@ function drawGeometry() {
 
 function drawRectanglePreview() {
   if (!rectanglePoints.length) return;
-  ctx.strokeStyle = '#ef4444';
+  ctx.strokeStyle = '#f97316';
   ctx.lineWidth = 2;
   ctx.beginPath();
   const [sx, sy] = worldToCanvas(rectanglePoints[0]);
@@ -187,8 +187,29 @@ function drawRectanglePreview() {
     ctx.lineTo(cx, cy);
   }
   ctx.stroke();
-  ctx.fillStyle = '#ef4444';
+  ctx.fillStyle = '#f97316';
   rectanglePoints.forEach((pt) => {
+    const [cx, cy] = worldToCanvas(pt);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawFrontPoints() {
+  if (!frontPoints.length) return;
+  ctx.strokeStyle = '#7c3aed';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  const [sx, sy] = worldToCanvas(frontPoints[0]);
+  ctx.moveTo(sx, sy);
+  for (let i = 1; i < frontPoints.length; i += 1) {
+    const [cx, cy] = worldToCanvas(frontPoints[i]);
+    ctx.lineTo(cx, cy);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#7c3aed';
+  frontPoints.forEach((pt) => {
     const [cx, cy] = worldToCanvas(pt);
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
@@ -238,6 +259,7 @@ function drawCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGeometry();
   drawRectanglePreview();
+  drawFrontPoints();
   drawFootprint();
   drawFrontVector();
 }
@@ -255,9 +277,11 @@ function updateSummaries() {
 
 canvas.addEventListener('click', (event) => {
   const rect = canvas.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const y = event.clientY - rect.top;
-  const worldPoint = canvasToWorld(x, y);
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const rawX = (event.clientX - rect.left) * scaleX;
+  const rawY = (event.clientY - rect.top) * scaleY;
+  const worldPoint = canvasToWorld(rawX, rawY);
   if (captureMode === 'footprint') {
     if (rectanglePoints.length >= 3) rectanglePoints = [];
     rectanglePoints.push(worldPoint);
