@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -78,7 +79,7 @@ async def read_job_artifacts(job_id: str, request: Request) -> dict[str, object]
         raise HTTPException(status_code=404, detail="Artifacts not available yet.")
     snapshot = build_output_snapshot(output_dir)
     artifacts = snapshot.get("artifacts", {})
-    add_download_urls(artifacts, request)
+    add_download_urls(job_id, artifacts, request)
     return {
         "job_id": job_id,
         "artifacts": artifacts,
@@ -87,30 +88,24 @@ async def read_job_artifacts(job_id: str, request: Request) -> dict[str, object]
     }
 
 
-def add_download_urls(artifacts: dict[str, object], request: Request) -> None:
+def add_download_urls(job_id: str, artifacts: dict[str, object], request: Request) -> None:
     """Attach downloadable URLs for known artifact paths."""
-    storage_root = JOB_STORAGE.parent  # /app/storage
+    workspace_root = JOB_STORAGE / job_id
     files_root = Path("/data")
 
     def to_url(path_str: str) -> str | None:
         path = Path(path_str)
         try:
-            rel = path.relative_to(storage_root)
+            rel = path.relative_to(workspace_root)
+            return str(request.url_for("proxy_job_file", job_id=job_id, full_path=str(rel)))
         except ValueError:
-            # If the file lives on the mounted /data volume, expose via /files (download endpoint).
-            try:
-                rel = path.relative_to(files_root)
-                return str(request.url_for("download_uploaded_file", filename=rel.name))
-            except ValueError:
-                return None
+            pass
 
         try:
-            rel_to_workspace = rel.relative_to("jobs")
+            rel = path.relative_to(files_root)
+            return str(request.url_for("download_uploaded_file", filename=rel.name))
         except ValueError:
-            rel_to_workspace = rel
-
-        target = Path("jobs") / rel_to_workspace
-        return str(request.url_for("proxy_job_file", job_path=str(target)))
+            return None
 
     def inject(obj: object):
         if isinstance(obj, dict):

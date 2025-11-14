@@ -640,32 +640,42 @@ function renderArtifactsData(artifacts) {
     artifactsTableBody.innerHTML = '<tr><td colspan="2" class="placeholder">Artifacts will appear once a job finishes.</td></tr>';
     return;
   }
+
   const rows = [];
 
-  const pushRow = (label, value) => {
+  const addRow = (label, value, link) => {
     if (value === undefined || value === null || value === '') return;
-    rows.push([label, value]);
+    rows.push([label, value, link]);
   };
 
-  Object.entries(artifacts).forEach(([key, value]) => {
+  const walk = (prefix, value, siblings = {}) => {
     if (Array.isArray(value)) {
-      value.forEach((item, index) => {
-        if (item && typeof item === 'object') {
-          Object.entries(item).forEach(([childKey, childVal]) => {
-            if (childVal === undefined || childVal === null) return;
-            const prefix = typeof index === 'number' ? `${key}[${index + 1}]` : key;
-            pushRow(`${prefix}.${childKey}`, childVal);
-          });
+      value.forEach((entry, index) => {
+        const childPrefix = prefix ? `${prefix}[${index + 1}]` : `[${index + 1}]`;
+        walk(childPrefix, entry);
+      });
+      return;
+    }
+
+    if (value && typeof value === 'object') {
+      Object.keys(value).forEach((key) => {
+        if (key.endsWith('_url')) return;
+        const child = value[key];
+        const childUrl = value[`${key}_url`];
+        const label = prefix ? `${prefix}.${key}` : key;
+        if (Array.isArray(child) || (child && typeof child === 'object')) {
+          walk(label, child, value);
         } else {
-          pushRow(`${key}[${index + 1}]`, item);
+          addRow(label, child, childUrl);
         }
       });
-    } else if (value && typeof value === 'object') {
-      Object.entries(value).forEach(([childKey, childVal]) => pushRow(`${key}.${childKey}`, childVal));
-    } else {
-      pushRow(key, value);
+      return;
     }
-  });
+
+    addRow(prefix, value, siblings[`${prefix}_url`]);
+  };
+
+  walk('', artifacts);
 
   if (!rows.length) {
     artifactsTableBody.innerHTML = '<tr><td colspan="2" class="placeholder">Artifacts will appear once a job finishes.</td></tr>';
@@ -673,29 +683,38 @@ function renderArtifactsData(artifacts) {
   }
 
   artifactsTableBody.innerHTML = '';
-  rows.forEach(([label, path]) => {
+  rows.forEach(([label, value, link]) => {
     const tr = document.createElement('tr');
     const labelCell = document.createElement('td');
     labelCell.textContent = label;
     const valueCell = document.createElement('td');
-    if (typeof path === 'string' && path && path.startsWith('/')) {
+
+    if (link) {
+      const anchor = document.createElement('a');
+      anchor.href = link;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.textContent = value;
+      valueCell.appendChild(anchor);
+    } else if (typeof value === 'string' && value.startsWith('http')) {
+      const anchor = document.createElement('a');
+      anchor.href = value;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.textContent = value;
+      valueCell.appendChild(anchor);
+    } else if (typeof value === 'string' && value.startsWith('/')) {
       const code = document.createElement('code');
-      code.textContent = path;
+      code.textContent = value;
       valueCell.appendChild(code);
-    } else if (typeof path === 'string' && path.startsWith('http')) {
-      const link = document.createElement('a');
-      link.href = path;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      link.textContent = path;
-      valueCell.appendChild(link);
-    } else if (typeof path === 'string') {
-      valueCell.textContent = path;
+    } else if (typeof value === 'string') {
+      valueCell.textContent = value;
     } else {
       const pre = document.createElement('pre');
-      pre.textContent = JSON.stringify(path, null, 2);
+      pre.textContent = JSON.stringify(value, null, 2);
       valueCell.appendChild(pre);
     }
+
     tr.appendChild(labelCell);
     tr.appendChild(valueCell);
     artifactsTableBody.appendChild(tr);
