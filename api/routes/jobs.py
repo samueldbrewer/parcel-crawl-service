@@ -116,7 +116,7 @@ def add_download_urls(job_id: str, artifacts: dict[str, object], request: Reques
 
     def inject(obj: object):
         if isinstance(obj, dict):
-            for key, value in obj.items():
+            for key, value in list(obj.items()):
                 if isinstance(value, str) and value.startswith("/"):
                     url = to_url(value)
                     if url:
