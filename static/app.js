@@ -522,7 +522,7 @@ function renderJobDetails(job) {
   if (!job) {
     jobDetails.innerHTML = '<p class="placeholder">No job data yet.</p>';
     logTailBox.textContent = '(log tail will appear here as jobs update)';
-    renderArtifacts(null);
+    renderArtifactsData(null);
     return;
   }
 
@@ -606,7 +606,12 @@ function renderJobDetails(job) {
   }
   logTailBox.textContent = 'Loading logs…';
   fetchJobLog(job.id);
-  renderArtifacts(job);
+  if (result && result.artifacts) {
+    renderArtifactsData(result.artifacts);
+  } else {
+    renderArtifactsData(null);
+  }
+  fetchJobArtifacts(job.id);
 }
 
 async function fetchJobLog(jobId) {
@@ -630,13 +635,12 @@ async function fetchJobLog(jobId) {
 
 renderJobDetails(null);
 
-function renderArtifacts(job) {
-  if (!job || !job.result || !job.result.artifacts) {
+function renderArtifactsData(artifacts) {
+  if (!artifacts) {
     artifactsTableBody.innerHTML = '<tr><td colspan="2" class="placeholder">Artifacts will appear once a job finishes.</td></tr>';
     return;
   }
   const rows = [];
-  const artifacts = job.result.artifacts;
 
   const pushRow = (label, value) => {
     if (value === undefined || value === null || value === '') return;
@@ -696,4 +700,22 @@ function renderArtifacts(job) {
     tr.appendChild(valueCell);
     artifactsTableBody.appendChild(tr);
   });
+}
+
+async function fetchJobArtifacts(jobId) {
+  if (!jobId) return;
+  try {
+    const resp = await fetch(`/jobs/${jobId}/artifacts`);
+    if (resp.status === 404) {
+      if (!artifactsTableBody.innerHTML) {
+        artifactsTableBody.innerHTML = '<tr><td colspan="2" class="placeholder">Artifacts will appear once a job finishes.</td></tr>';
+      }
+      return;
+    }
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    renderArtifactsData(data.artifacts || null);
+  } catch (err) {
+    artifactsTableBody.innerHTML = `<tr><td colspan="2" class="placeholder">Failed to load artifacts: ${err}</td></tr>`;
+  }
 }

@@ -222,6 +222,10 @@ def execute(command: List[str], log_path: Path) -> int:
 
 
 def collect_summary(output_dir: Path) -> Dict[str, Any]:
+    return build_output_snapshot(output_dir)
+
+
+def build_output_snapshot(output_dir: Path) -> Dict[str, Any]:
     summary: Dict[str, Any] = {
         "output_dir": str(output_dir),
         "best_parcels": [],

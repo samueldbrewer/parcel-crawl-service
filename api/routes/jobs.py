@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 
 from api import models
 from api.services import workers
-from worker.run_job import JOB_STORAGE, read_log_tail
+from worker.run_job import JOB_STORAGE, build_output_snapshot, read_log_tail
 
 router = APIRouter()
 
@@ -67,6 +67,21 @@ async def read_job_logs(job_id: str, lines: int = 200) -> dict[str, object]:
         "lines": limit,
         "log_tail": read_log_tail(log_path, limit),
         "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/{job_id}/artifacts")
+async def read_job_artifacts(job_id: str) -> dict[str, object]:
+    workspace = JOB_STORAGE / job_id
+    output_dir = workspace / "outputs"
+    if not output_dir.exists():
+        raise HTTPException(status_code=404, detail="Artifacts not available yet.")
+    snapshot = build_output_snapshot(output_dir)
+    return {
+        "job_id": job_id,
+        "artifacts": snapshot.get("artifacts", {}),
+        "cycle_summaries": snapshot.get("cycle_summaries", []),
+        "output_dir": snapshot.get("output_dir"),
     }
 
 
