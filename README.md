@@ -154,6 +154,8 @@ Examples:
 - When calling `/jobs`, you can now supply `footprint_points` (list of `[x, y]`) and `front_direction`
   (two floats) to reuse the footprint captured locally. These become `--footprint-json` and
   `--front-vector` when the worker launches the crawler.
+- On the web UI, the **Start Crawl** button remains disabled until shrink-wrap succeeds; once the modal
+  reports “Shrink-wrap captured,” the button flips to “Start Crawl” and the job payload is ready.
 
 ### Remote GUI workflow
 
