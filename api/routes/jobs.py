@@ -16,6 +16,15 @@ JOBS: dict[str, models.JobRecord] = {}
 
 @router.post("/", response_model=models.JobStatus)
 async def create_job(payload: models.JobCreate) -> models.JobStatus:
+    return await _create_job(payload)
+
+
+@router.post("", response_model=models.JobStatus)
+async def create_job_no_slash(payload: models.JobCreate) -> models.JobStatus:
+    return await _create_job(payload)
+
+
+async def _create_job(payload: models.JobCreate) -> models.JobStatus:
     job_id = uuid4().hex
     config = dict(payload.config or {})
     if payload.footprint_points:
