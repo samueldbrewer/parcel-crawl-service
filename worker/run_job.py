@@ -105,6 +105,8 @@ def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
 
 def download_dxf(url: str, dest: Path) -> None:
     """Download the DXF footprint for the job."""
+    url = str(url)
+
     if url.startswith("file://"):
         src = Path(url[7:])
         if not src.exists():
