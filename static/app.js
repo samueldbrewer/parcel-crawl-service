@@ -648,7 +648,7 @@ function renderArtifactsData(artifacts) {
     rows.push([label, value, link]);
   };
 
-  const walk = (prefix, value, siblings = {}) => {
+  const walk = (prefix, value) => {
     if (Array.isArray(value)) {
       value.forEach((entry, index) => {
         const childPrefix = prefix ? `${prefix}[${index + 1}]` : `[${index + 1}]`;
@@ -664,7 +664,7 @@ function renderArtifactsData(artifacts) {
         const childUrl = value[`${key}_url`];
         const label = prefix ? `${prefix}.${key}` : key;
         if (Array.isArray(child) || (child && typeof child === 'object')) {
-          walk(label, child, value);
+          walk(label, child);
         } else {
           addRow(label, child, childUrl);
         }
@@ -672,7 +672,7 @@ function renderArtifactsData(artifacts) {
       return;
     }
 
-    addRow(prefix, value, siblings[`${prefix}_url`]);
+    addRow(prefix, value, undefined);
   };
 
   walk('', artifacts);
