@@ -34,6 +34,7 @@ let frontPoints = [];
 let footprintWorld = [];
 let frontOrigin = null;
 let frontVector = null;
+let shrinkwrapReady = false;
 
 function setStatus(text, loading = false) {
   statusText.textContent = text;
@@ -386,6 +387,7 @@ applyCaptureBtn.addEventListener('click', async () => {
     footprintWorld = data.footprint_points || [];
     frontOrigin = data.front_origin || null;
     frontVector = data.front_direction || null;
+    shrinkwrapReady = true;
     rectanglePoints = [];
     frontPoints = [];
     recomputeViewBox();
@@ -431,7 +433,8 @@ async function loadGeometry(filename) {
   footprintWorld = [];
   frontOrigin = null;
   frontVector = null;
-  recomputeViewBox();
+  shrinkwrapReady = false;
+  recomputeViewBox()();
   drawCanvas();
   updateSummaries();
   updateStartButton();
