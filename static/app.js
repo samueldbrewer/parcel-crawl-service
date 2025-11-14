@@ -637,15 +637,29 @@ function renderArtifacts(job) {
   }
   const rows = [];
   const artifacts = job.result.artifacts;
+
+  const pushRow = (label, value) => {
+    if (value === undefined || value === null || value === '') return;
+    rows.push([label, value]);
+  };
+
   Object.entries(artifacts).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       value.forEach((item, index) => {
-        rows.push([`${key}[${index + 1}]`, item]);
+        if (item && typeof item === 'object') {
+          Object.entries(item).forEach(([childKey, childVal]) => {
+            if (childVal === undefined || childVal === null) return;
+            const prefix = typeof index === 'number' ? `${key}[${index + 1}]` : key;
+            pushRow(`${prefix}.${childKey}`, childVal);
+          });
+        } else {
+          pushRow(`${key}[${index + 1}]`, item);
+        }
       });
     } else if (value && typeof value === 'object') {
-      rows.push([key, JSON.stringify(value, null, 2)]);
+      Object.entries(value).forEach(([childKey, childVal]) => pushRow(`${key}.${childKey}`, childVal));
     } else {
-      rows.push([key, value]);
+      pushRow(key, value);
     }
   });
 

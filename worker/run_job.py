@@ -231,6 +231,7 @@ def collect_summary(output_dir: Path) -> Dict[str, Any]:
             "cycle_json": [],
             "cycle_png": [],
             "parcels_dir": None,
+            "parcels": [],
         },
     }
 
@@ -244,6 +245,21 @@ def collect_summary(output_dir: Path) -> Dict[str, Any]:
 
     if parcels_dir.exists():
         summary["artifacts"]["parcels_dir"] = str(parcels_dir)
+        parcel_entries: List[Dict[str, Any]] = []
+        for parcel_dir in sorted(path for path in parcels_dir.iterdir() if path.is_dir()):
+            entry: Dict[str, Any] = {"parcel_id": parcel_dir.name}
+            best_png = parcel_dir / "best.png"
+            composite_png = parcel_dir / "composite.png"
+            placements_json = parcel_dir / "placements.json"
+            if best_png.exists():
+                entry["best_png"] = str(best_png)
+            if composite_png.exists():
+                entry["composite_png"] = str(composite_png)
+            if placements_json.exists():
+                entry["placements_json"] = str(placements_json)
+            if entry.keys() - {"parcel_id"}:
+                parcel_entries.append(entry)
+        summary["artifacts"]["parcels"] = parcel_entries
 
     if cycles_dir.exists():
         for json_path in sorted(cycles_dir.glob("cycle_*.json")):
