@@ -10,6 +10,7 @@ const resultBox = document.getElementById('resultBox');
 const historyTableBody = document.querySelector('#historyTable tbody');
 const jobDetails = document.getElementById('jobDetails');
 const logTailBox = document.getElementById('logTail');
+const artifactsTableBody = document.querySelector('#artifactsTable tbody');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -521,6 +522,7 @@ function renderJobDetails(job) {
   if (!job) {
     jobDetails.innerHTML = '<p class="placeholder">No job data yet.</p>';
     logTailBox.textContent = '(log tail will appear here as jobs update)';
+    renderArtifacts(null);
     return;
   }
 
@@ -533,9 +535,10 @@ function renderJobDetails(job) {
     ['Result URL', job.result_url || '—'],
     ['Error', job.error || '—'],
   ];
+  let configText = null;
 
   if (job.config) {
-    entries.push(['Config', JSON.stringify(job.config, null, 2)]);
+    configText = JSON.stringify(job.config, null, 2);
   }
 
   const result = job.result || {};
@@ -567,11 +570,6 @@ function renderJobDetails(job) {
       body.appendChild(link);
     } else if (label === 'DXF URL' && value && value !== '—') {
       body.textContent = value;
-    } else if (label === 'Config' && typeof value === 'string') {
-      const pre = document.createElement('pre');
-      pre.textContent = value;
-      body.innerHTML = '';
-      body.appendChild(pre);
     } else {
       body.textContent = value || '—';
     }
@@ -580,13 +578,35 @@ function renderJobDetails(job) {
     fragment.appendChild(card);
   });
 
-  if (!entries.length) {
+  if (configText) {
+    const card = document.createElement('div');
+    card.className = 'detail detail-config';
+    const title = document.createElement('p');
+    title.className = 'label';
+    title.textContent = 'Config';
+    const body = document.createElement('div');
+    body.className = 'value';
+    const detailsEl = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Show runtime config';
+    const pre = document.createElement('pre');
+    pre.textContent = configText;
+    detailsEl.appendChild(summary);
+    detailsEl.appendChild(pre);
+    body.appendChild(detailsEl);
+    card.appendChild(title);
+    card.appendChild(body);
+    fragment.appendChild(card);
+  }
+
+  if (!fragment.childNodes.length) {
     jobDetails.innerHTML = '<p class="placeholder">No job details available.</p>';
   } else {
     jobDetails.appendChild(fragment);
   }
   logTailBox.textContent = 'Loading logs…';
   fetchJobLog(job.id);
+  renderArtifacts(job);
 }
 
 async function fetchJobLog(jobId) {
@@ -609,3 +629,57 @@ async function fetchJobLog(jobId) {
 }
 
 renderJobDetails(null);
+
+function renderArtifacts(job) {
+  if (!job || !job.result || !job.result.artifacts) {
+    artifactsTableBody.innerHTML = '<tr><td colspan="2" class="placeholder">Artifacts will appear once a job finishes.</td></tr>';
+    return;
+  }
+  const rows = [];
+  const artifacts = job.result.artifacts;
+  Object.entries(artifacts).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        rows.push([`${key}[${index + 1}]`, item]);
+      });
+    } else if (value && typeof value === 'object') {
+      rows.push([key, JSON.stringify(value, null, 2)]);
+    } else {
+      rows.push([key, value]);
+    }
+  });
+
+  if (!rows.length) {
+    artifactsTableBody.innerHTML = '<tr><td colspan="2" class="placeholder">Artifacts will appear once a job finishes.</td></tr>';
+    return;
+  }
+
+  artifactsTableBody.innerHTML = '';
+  rows.forEach(([label, path]) => {
+    const tr = document.createElement('tr');
+    const labelCell = document.createElement('td');
+    labelCell.textContent = label;
+    const valueCell = document.createElement('td');
+    if (typeof path === 'string' && path && path.startsWith('/')) {
+      const code = document.createElement('code');
+      code.textContent = path;
+      valueCell.appendChild(code);
+    } else if (typeof path === 'string' && path.startsWith('http')) {
+      const link = document.createElement('a');
+      link.href = path;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = path;
+      valueCell.appendChild(link);
+    } else if (typeof path === 'string') {
+      valueCell.textContent = path;
+    } else {
+      const pre = document.createElement('pre');
+      pre.textContent = JSON.stringify(path, null, 2);
+      valueCell.appendChild(pre);
+    }
+    tr.appendChild(labelCell);
+    tr.appendChild(valueCell);
+    artifactsTableBody.appendChild(tr);
+  });
+}

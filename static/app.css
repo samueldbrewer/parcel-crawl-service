@@ -223,9 +223,46 @@ button.danger:hover {
   word-break: break-all;
 }
 
+.details-grid .value details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.details-grid .value pre {
+  margin: 6px 0 0;
+  max-height: 200px;
+  overflow: auto;
+  background: #0f172a;
+  color: #d1d5db;
+  padding: 8px;
+  border-radius: 6px;
+}
+
 .placeholder {
   margin: 0;
   color: #475569;
+}
+
+.artifacts h3 {
+  margin-top: 20px;
+}
+
+#artifactsTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+#artifactsTable th,
+#artifactsTable td {
+  padding: 8px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+}
+
+#artifactsTable td:last-child {
+  word-break: break-all;
 }
 
 .log-tail h3 {
