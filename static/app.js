@@ -8,6 +8,8 @@ const dxfSelect = document.getElementById('dxfSelect');
 const statusText = document.getElementById('statusText');
 const resultBox = document.getElementById('resultBox');
 const historyTableBody = document.querySelector('#historyTable tbody');
+const jobDetails = document.getElementById('jobDetails');
+const logTailBox = document.getElementById('logTail');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -478,6 +480,7 @@ async function handleJob(event) {
     resultBox.textContent = JSON.stringify(job, null, 2);
     setStatus(`Job ${job.id} queued.`);
     updateHistory(job);
+    renderJobDetails(job);
     pollJob(job.id);
   } catch (err) {
     setStatus(`Job request failed: ${err}`);
@@ -493,6 +496,7 @@ async function pollJob(jobId) {
     resultBox.textContent = JSON.stringify(job, null, 2);
     setStatus(`Job ${job.id}: ${job.status}`);
     updateHistory(job);
+    renderJobDetails(job);
     if (['queued', 'running'].includes(job.status)) {
       pollTimer = setTimeout(() => pollJob(jobId), 4000);
     }
@@ -512,3 +516,81 @@ recomputeViewBox();
 drawCanvas();
 updateSummaries();
 updateStartButton();
+
+function renderJobDetails(job) {
+  if (!job) {
+    jobDetails.innerHTML = '<p class="placeholder">No job data yet.</p>';
+    logTailBox.textContent = '(log tail will appear here as jobs update)';
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  const entries = [
+    ['Job ID', job.id],
+    ['Status', job.status],
+    ['Address', job.address || '—'],
+    ['DXF URL', job.dxf_url || '—'],
+    ['Result URL', job.result_url || '—'],
+    ['Error', job.error || '—'],
+  ];
+
+  if (job.config) {
+    entries.push(['Config', JSON.stringify(job.config, null, 2)]);
+  }
+
+  const result = job.result || {};
+  if (result.workspace) {
+    entries.push(['Workspace', result.workspace]);
+  }
+  if (result.manifest_path) {
+    entries.push(['Manifest', result.manifest_path]);
+  }
+  if (result.command) {
+    entries.push(['Command', result.command]);
+  }
+
+  jobDetails.innerHTML = '';
+  entries.forEach(([label, value]) => {
+    const card = document.createElement('div');
+    card.className = 'detail';
+    const title = document.createElement('p');
+    title.className = 'label';
+    title.textContent = label;
+    const body = document.createElement('p');
+    body.className = 'value';
+    if (label === 'Result URL' && value && value !== '—') {
+      const link = document.createElement('a');
+      link.href = value;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Open';
+      body.appendChild(link);
+    } else if (label === 'DXF URL' && value && value !== '—') {
+      body.textContent = value;
+    } else if (label === 'Config' && typeof value === 'string') {
+      const pre = document.createElement('pre');
+      pre.textContent = value;
+      body.innerHTML = '';
+      body.appendChild(pre);
+    } else {
+      body.textContent = value || '—';
+    }
+    card.appendChild(title);
+    card.appendChild(body);
+    fragment.appendChild(card);
+  });
+
+  if (!entries.length) {
+    jobDetails.innerHTML = '<p class="placeholder">No job details available.</p>';
+  } else {
+    jobDetails.appendChild(fragment);
+  }
+
+  if (result.log_tail) {
+    logTailBox.textContent = result.log_tail;
+  } else {
+    logTailBox.textContent = '(log tail will appear here as jobs update)';
+  }
+}
+
+renderJobDetails(null);
