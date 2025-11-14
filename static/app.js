@@ -393,6 +393,8 @@ applyCaptureBtn.addEventListener('click', async () => {
     updateSummaries();
     captureModal.classList.add('hidden');
     setStatus('Shrink-wrap captured. Ready to start crawl.');
+    startButton.disabled = false;
+    startButton.textContent = 'Start Crawl';
   } catch (err) {
     setStatus(`Shrink-wrap failed: ${err}`);
   }
