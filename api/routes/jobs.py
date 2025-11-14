@@ -5,6 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
+from starlette.routing import NoMatchFound
 
 from api import models
 from api.services import workers
@@ -97,13 +98,19 @@ def add_download_urls(job_id: str, artifacts: dict[str, object], request: Reques
         path = Path(path_str)
         try:
             rel = path.relative_to(workspace_root)
-            return str(request.url_for("proxy_job_file", job_id=job_id, full_path=str(rel)))
+            try:
+                return str(request.url_for("proxy_job_file", job_id=job_id, full_path=str(rel)))
+            except NoMatchFound:
+                return None
         except ValueError:
             pass
 
         try:
             rel = path.relative_to(files_root)
-            return str(request.url_for("download_uploaded_file", filename=rel.name))
+            try:
+                return str(request.url_for("download_uploaded_file", filename=rel.name))
+            except NoMatchFound:
+                return None
         except ValueError:
             return None
 
