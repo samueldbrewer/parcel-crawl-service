@@ -35,6 +35,7 @@ let footprintWorld = [];
 let frontOrigin = null;
 let frontVector = null;
 let shrinkwrapReady = false;
+let shrinkwrapReady = false;
 
 function setStatus(text, loading = false) {
   statusText.textContent = text;
@@ -42,7 +43,7 @@ function setStatus(text, loading = false) {
 }
 
 function readyForJob() {
-  return footprintWorld.length >= 3 && !!frontVector;
+  return shrinkwrapReady && footprintWorld.length >= 3 && !!frontVector;
 }
 
 function updateStartButton() {
