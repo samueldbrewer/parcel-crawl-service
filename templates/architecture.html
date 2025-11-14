@@ -56,6 +56,16 @@ Worker (worker/run_job.py)
       <li>Download proxy streams artifact files without exposing raw filesystem paths.</li>
     </ul>
 
+    <h2>Inside <code>parcel_crawl_demo_v4.py</code></h2>
+    <ol>
+      <li><strong>Argument assembly:</strong> the worker injects DXF path, optional <code>--footprint-json</code>, frontage vectors, and config overrides (cycles, rotation_step, score_workers, etc.).</li>
+      <li><strong>Geocoding + parcel fetch:</strong> the script geocodes the address with ArcGIS, identifies the subject parcel geometry, and fetches nearby parcels/zoning layers.</li>
+      <li><strong>Pose generation:</strong> for each cycle it produces hundreds/thousands of candidate placements by rotating and offsetting the footprint within parcel boundaries.</li>
+      <li><strong>Scoring:</strong> multiprocessing workers evaluate each pose (clearances, frontage alignment, buffers, composite score) and keep the best-ranked structures.</li>
+      <li><strong>Artifact emission:</strong> per-parcel PNGs (<code>best.png</code>, <code>composite.png</code>) and JSON manifests (<code>placements.json</code>, <code>cycle_*.json</code>) are written under <code>outputs/</code> as soon as each parcel/cycle finishes.</li>
+      <li><strong>Summary output:</strong> creates <code>best_parcels.json</code> and other metadata that the worker ingests into <code>result.json</code> for the API/UI.</li>
+    </ol>
+
     <h2>Key Endpoints</h2>
     <ul>
       <li><code>GET/POST /files</code>: list/upload DXFs, return file + download URLs.</li>
