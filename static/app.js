@@ -35,7 +35,6 @@ let footprintWorld = [];
 let frontOrigin = null;
 let frontVector = null;
 let shrinkwrapReady = false;
-let shrinkwrapReady = false;
 
 function setStatus(text, loading = false) {
   statusText.textContent = text;
