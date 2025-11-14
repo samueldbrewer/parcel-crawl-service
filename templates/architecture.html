@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Parcel Crawl Architecture</title>
+  <link rel="stylesheet" href="/static/app.css" />
+  <style>
+    body { background: #0f172a; color: #e2e8f0; }
+    main { max-width: 900px; margin: 0 auto; padding: 32px; background: #1e293b; border-radius: 10px; }
+    pre { background: #0f172a; padding: 16px; border-radius: 8px; overflow-x: auto; }
+    h1, h2, h3 { color: #f8fafc; }
+    ul { line-height: 1.5; }
+    code { color: #93c5fd; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Parcel Crawl Service Architecture</h1>
+    <p>This document summarizes how the web UI, FastAPI backend, and worker cooperate to run parcel crawls.</p>
+
+    <h2>High-Level Flow</h2>
+    <pre>
+Browser UI (static/app.js)
+   ├─ Lists DXFs, uploads files → <code>GET/POST /files</code>
+   ├─ Preview geometry & shrink-wrap → <code>GET /files/{name}/geometry</code>, <code>POST /files/{name}/shrinkwrap</code>
+   ├─ Submits crawl payload → <code>POST /jobs</code>
+   ├─ Polls status/logs/artifacts → <code>GET /jobs/{id}</code>, <code>/jobs/{id}/logs</code>, <code>/jobs/{id}/artifacts</code>
+   └─ Downloads outputs via signed links → <code>/jobs/{id}/files/... </code> or <code>/files/{filename}</code>
+
+FastAPI Backend (api/routes/*)
+   ├─ <strong>Uploads router</strong>: validates filenames, writes to disk/volume, exposes download + shrink-wrap helpers.
+   ├─ <strong>Jobs router</strong>: validates payloads, keeps in-memory job map, exposes live status/log/artifact endpoints.
+   ├─ <strong>Downloads router</strong>: streams any artifact under a job workspace.
+   └─ <strong>Worker pool</strong>: submits work to <code>worker/run_job.py</code>.
+
+Worker (worker/run_job.py)
+   ├─ Downloads DXF (HTTP/file URL), populates <code>storage/jobs/&lt;id&gt;</code>.
+   ├─ Builds CLI args and invokes <code>parcel_crawl_demo_v4.py</code>.
+   ├─ Collects logs, PNGs, JSON manifests as the crawl proceeds.
+   └─ Returns a summary + artifact manifest for the API/UI.
+    </pre>
+
+    <h2>Frontend Responsibilities</h2>
+    <ul>
+      <li>HTML/CSS/JS lives in <code>templates/index.html</code> and <code>static/</code>.</li>
+      <li>Captures shrink-wrap points on canvas, but sends them to the server for actual geometry processing.</li>
+      <li>Polls backend endpoints every few seconds and renders the latest status, log tail, and artifact links.</li>
+      <li>No heavy computation—only light vector math and fetch calls.</li>
+    </ul>
+
+    <h2>Backend Responsibilities</h2>
+    <ul>
+      <li>Owns all DXF parsing (Shapely), shrink-wrap operations, and job orchestration.</li>
+      <li>Worker downloads inputs, runs <code>parcel_crawl_demo_v4.py</code>, and writes outputs under <code>storage/jobs/&lt;id&gt;</code>.</li>
+      <li>Artifacts endpoint snapshots the workspace so the UI can show clickable files mid-run.</li>
+      <li>Download proxy streams artifact files without exposing raw filesystem paths.</li>
+    </ul>
+
+    <h2>Key Endpoints</h2>
+    <ul>
+      <li><code>GET/POST /files</code>: list/upload DXFs, return file + download URLs.</li>
+      <li><code>GET /files/{name}/geometry</code>: normalized polylines for previews.</li>
+      <li><code>POST /files/{name}/shrinkwrap</code>: server-side shrink-wrap and frontage vector.</li>
+      <li><code>POST /jobs</code>: enqueue a crawler run.</li>
+      <li><code>GET /jobs/{id}</code>: job metadata (status, result manifest path).</li>
+      <li><code>GET /jobs/{id}/logs</code>: streaming tail of <code>crawl.log</code>.</li>
+      <li><code>GET /jobs/{id}/artifacts</code>: snapshot of generated files (with download links).</li>
+      <li><code>GET /jobs/{id}/files/{path}</code>: download a specific artifact within the job workspace.</li>
+      <li><code>GET /files/{filename}</code>: download DXFs or ZIPs stored on the shared volume.</li>
+    </ul>
+
+    <h3>Data Paths</h3>
+    <pre>
+/data                         # volume for uploaded DXFs (files router)
+/app/storage/jobs/&lt;id&gt;        # worker scratch dir (DXF, outputs, logs)
+  ├─ crawl.log
+  ├─ footprint.dxf/json
+  └─ outputs/
+       ├─ parcels/&lt;parcel_id&gt;/{best.png, composite.png, placements.json}
+       └─ cycles/cycle_*.{json,png}
+    </pre>
+
+    <p>Access this page anytime at <code>/architecture</code>.</p>
+  </main>
+</body>
+</html>
