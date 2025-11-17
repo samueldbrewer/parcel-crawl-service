@@ -1,63 +1,64 @@
-# Parcel Crawl Service Endpoints
+# Parcel Crawl Service — How to Interface
 
-Base URLs:
-- Local:  http://localhost:8000
-- Remote: https://landlens.up.railway.app
+Purpose: submit an address/design (DXF + optional captured footprint) and run parcel_crawl_demo_v4 across parcels. This service wraps the crawler with upload, shrink-wrap, job execution, and artifact download APIs.
 
-## Health
-- GET /health
-  - Returns service status and upload target info.
+Base URLs
+- Production: https://landlens.up.railway.app
+- Local dev: http://localhost:8000
+- OpenAPI docs: /docs
+- Schema: /openapi.json
 
-## Jobs
-- POST /jobs
-  - Submit a crawl job
-  - Body (JSON): {
-      "address": "<string>",
-      "dxf_url": "<http or file URL>",
-      "config": { ... optional crawl parameters ... },
-      "footprint_points": [[x, y], ...],
-      "front_direction": [x, y]
-    }
-- GET /jobs/{job_id}
-  - Returns job status/result/manifest.
-- GET /jobs/{job_id}/log
-  - Streams crawl log for the job.
-- GET /jobs/{job_id}/outputs/{path}
-  - Download job artifacts (PNG/JSON, etc.)
+Typical Workflow
+1) Upload DXF: POST /files (multipart `file=@...`). Response includes `file_url` (use as `dxf_url` later) and public `download_url`.
+2) (Optional) Prepare footprint/frontage locally: POST /files/{name}/shrinkwrap with rectangle + frontage points, or GET /files/{name}/preview to auto-detect. This yields `footprint_points` and `front_direction` you can reuse in jobs.
+3) Submit job: POST /jobs with address, `dxf_url` (from step 1), and optional `config` including `footprint_points`/`front_direction` from step 2. Service queues the job and runs parcel_crawl_demo_v4.
+4) Monitor: GET /jobs/{job_id} for status/result; GET /jobs/{job_id}/logs for crawl.log tail; GET /jobs/{job_id}/artifacts for manifest + download URLs; GET /jobs/{job_id}/geo for GeoJSON footprints + progress.
+5) Download outputs: GET /jobs/{job_id}/outputs/{path} as returned in artifacts, or use the URLs injected in the artifact manifest.
 
-## File Uploads
-- POST /files
-  - Multipart upload: field name "file"; stores to upload root and returns URLs for download and file:// usage.
-- GET /files
-  - Lists stored files.
-- GET /files/{filename}
-  - Downloads a stored file.
-- DELETE /files/{filename}
-  - Deletes a stored file from storage.
-- GET /files/{filename}/geometry
-  - Returns extracted DXF polylines as JSON.
-- POST /files/{filename}/shrinkwrap
-  - Body (JSON): {
-      "rectangle_points": [[x, y], ...],
-      "front_points": [[x, y], ...]
-    }
-  - Runs shrink-wrap and returns geometry/frontage info.
+Endpoint Details
+- GET /health — service status and upload target info.
 
-## Designs
-- GET /designs
-  - Lists available designs.
-- GET /designs/{design_id}
-  - Fetch a specific design.
+Jobs
+- POST /jobs — submit a crawl job.
+  Body fields:
+    address (string) — human-readable address for context/logging.
+    dxf_url (string) — http(s) or file:// URL to DXF. Use the `file_url` returned by /files.
+    config (object, optional) — passed through to parcel_crawl_demo_v4, e.g. cycles, score_workers, rotation_step, auto_front (bool), auto_offset (bool), render_cycle/render_best/render_composite (bool), full_rotation, skip_roads, front_angle, buffer, setback, etc.
+    footprint_points (array, optional) — list of [x, y] points defining the footprint polygon (from shrinkwrap/preview).
+    front_direction (array, optional) — [x, y] vector for frontage heading.
+  Response: { id, status }
+- GET /jobs — list in-memory jobs.
+- GET /jobs/{job_id} — job record with status, any error/result_url, and manifests stored when complete.
+- GET /jobs/{job_id}/logs — tail of crawl.log (default 200 lines; `?lines=` up to 2000).
+- GET /jobs/{job_id}/artifacts — artifact manifest with download URLs injected for files under job outputs or uploads.
+- GET /jobs/{job_id}/geo — GeoJSON FeatureCollection of best footprints per parcel plus progress counts.
 
-## Geocode
-- GET /geocode/reverse?lat={lat}&lon={lon}
-  - Reverse geocode using OSM Nominatim.
+Job outputs (from parcel_crawl_demo_v4)
+- Stored under storage/jobs/{job_id}/outputs.
+- Artifacts include: best_parcels.json; cycles/cycle_*.json and cycle_*.png; parcels/<parcel_id>/{best.png, composite.png, placements.json}.
+- Manifest URLs let you fetch PNG/JSON directly via /jobs/{job_id}/outputs/... (proxy) or via the injected URLs.
 
-## Debug
-- GET /debug/env
-  - Returns selected environment details.
+File Uploads & Prep
+- POST /files — upload DXF. Multipart field `file`; optional `filename` query. Returns stored path, file:// URL, download URL, and any extracted files if a ZIP.
+- GET /files — list uploaded files with file:// and download URLs.
+- GET /files/{filename} — download raw file.
+- DELETE /files/{filename} — delete uploaded file.
+- GET /files/{filename}/geometry — raw DXF polylines/paths (for custom previews).
+- GET /files/{filename}/preview — auto-detect footprint + front_direction from DXF.
+- POST /files/{filename}/shrinkwrap — run shrink-wrap from user-picked rectangle/front points. Body: { "rectangle_points": [[x,y] x3], "front_points": [[x,y],[x,y]] }. Returns footprint_points, front_direction, front_origin, area. Use these in /jobs config.
 
-Notes:
-- OpenAPI docs: GET /docs
-- JSON schema: GET /openapi.json
-- Authentication: none by default. Restrict at the ingress if needed.
+Designs
+- GET /designs — list saved design JSON files from storage/designs.
+- POST /designs — save a design payload: requires name, dxf_url, footprint_points, front_direction.
+- GET /designs/{slug} — fetch a saved design.
+
+Geocode
+- GET /geocode/reverse?lat=&lon= — reverse geocode via OSM Nominatim.
+
+Debug
+- GET /debug/env — selected environment details (for troubleshooting).
+
+Notes
+- Authentication: none enabled by default; restrict at ingress if needed.
+- Storage: job workspaces under storage/jobs; uploads under /data (override with DXF_UPLOAD_ROOT).
+- Worker uses `parcel_crawl_demo_v4.py` with flags built from `config` and the provided footprint/frontage when supplied.
