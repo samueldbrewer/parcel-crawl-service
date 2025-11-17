@@ -119,7 +119,7 @@ def add_download_urls(job_id: str, artifacts: dict[str, object], request: Reques
         except ValueError:
             return None
 
-def inject(obj: object):
+    def inject(obj: object):
         if isinstance(obj, dict):
             for key, value in list(obj.items()):
                 if isinstance(value, str) and value.startswith("/"):
