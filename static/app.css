@@ -362,3 +362,109 @@ button.danger:hover {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* New layout */
+.container {
+  max-width: 1200px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #94a3b8;
+  margin: 0 0 4px 0;
+}
+
+.subhead {
+  color: #cbd5e1;
+  margin: 6px 0 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+.left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sticky {
+  position: sticky;
+  top: 12px;
+}
+
+.inline-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.designs-list ul,
+.designs-list {
+  list-style: none;
+  padding-left: 0;
+  margin: 0;
+}
+
+.designs-list li {
+  margin: 4px 0;
+  padding: 6px 8px;
+  background: #0f172a;
+  border-radius: 4px;
+  border: 1px solid #1e293b;
+  cursor: pointer;
+}
+
+.map-frame {
+  height: 480px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.map-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-legend {
+  margin-top: 8px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.legend-dot.best {
+  background: #22c55e;
+}
+
+.legend-dot.parcel {
+  background: #3b82f6;
+}

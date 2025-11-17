@@ -25,6 +25,7 @@ const cfgRotation = document.getElementById('cfgRotation');
 const cfgScoreWorkers = document.getElementById('cfgScoreWorkers');
 const designPreview = document.getElementById('designPreview');
 const mapProgress = document.getElementById('mapProgress');
+const mapStatus = document.getElementById('mapStatus');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -54,6 +55,7 @@ let frontVector = null;
 let shrinkwrapReady = false;
 let mapInstance = null;
 let geoLayer = null;
+let selectedDesign = null;
 
 function setStatus(text, loading = false) {
   statusText.textContent = text;
@@ -783,6 +785,13 @@ async function refreshDesigns() {
         const footprint = JSON.parse(li.dataset.footprint || '[]');
         const front = JSON.parse(li.dataset.front || '[]');
         drawDesignPreview(footprint, front);
+        selectedDesign = design;
+        footprintWorld = footprint;
+        frontVector = front;
+        shrinkwrapReady = true;
+        updateSummaries();
+        updateStartButton();
+        setStatus(`Loaded design "${design.name}" into the form.`);
       });
       designsList.appendChild(li);
     });
