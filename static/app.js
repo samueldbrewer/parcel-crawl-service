@@ -52,6 +52,8 @@ let footprintWorld = [];
 let frontOrigin = null;
 let frontVector = null;
 let shrinkwrapReady = false;
+let mapInstance = null;
+let geoLayer = null;
 
 function setStatus(text, loading = false) {
   statusText.textContent = text;
@@ -513,6 +515,7 @@ async function pollJob(jobId) {
     setStatus(`Job ${job.id}: ${job.status}`);
     updateHistory(job);
     renderJobDetails(job);
+    fetchGeo(jobId);
     if (['queued', 'running'].includes(job.status)) {
       pollTimer = setTimeout(() => pollJob(jobId), 4000);
     }
@@ -834,6 +837,9 @@ function initTabs() {
       const target = tab.dataset.tab;
       const panel = document.querySelector(`.tab-panel[data-tab-panel="${target}"]`);
       if (panel) panel.classList.add('active');
+      if (target === 'map' && mapInstance) {
+        mapInstance.invalidateSize();
+      }
     });
   });
 }
@@ -877,11 +883,16 @@ function initMapTab() {
 function initLeafletMap(onDesignsReady) {
   const mapEl = document.getElementById('map');
   if (!mapEl) return;
-  const map = L.map(mapEl).setView([37.8, -96], 4);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors',
-  }).addTo(map);
+  mapInstance = L.map(mapEl).setView([37.8, -96], 4);
+  const maptilerKey = window.MAPTILER_KEY || '';
+  const tileUrl = maptilerKey
+    ? `https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${maptilerKey}`
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const attribution = maptilerKey
+    ? '&copy; MapTiler & OpenStreetMap contributors'
+    : '&copy; OpenStreetMap contributors';
+  L.tileLayer(tileUrl, { maxZoom: 19, attribution }).addTo(mapInstance);
+  geoLayer = L.geoJSON().addTo(mapInstance);
   let marker = null;
 
   const startMapJob = async (lat, lng) => {
@@ -930,15 +941,19 @@ function initLeafletMap(onDesignsReady) {
       renderJobDetails(job);
       pollJob(job.id);
       mapStatus.textContent = `Job ${job.id} queued (pin ${lat.toFixed(5)},${lng.toFixed(5)}).`;
+      // kick off geo polling for overlays
+      fetchGeo(job.id);
     } catch (err) {
       mapStatus.textContent = `Failed to start crawl: ${err}`;
+    } finally {
+      mapProgress.classList.add('hidden');
     }
   };
 
-  map.on('click', (evt) => {
+  mapInstance.on('click', (evt) => {
     const { lat, lng } = evt.latlng;
     if (marker) marker.remove();
-    marker = L.marker([lat, lng]).addTo(map);
+    marker = L.marker([lat, lng]).addTo(mapInstance);
     mapStatus.textContent = `Pin at ${lat.toFixed(5)}, ${lng.toFixed(5)}. Starting crawl…`;
     startMapJob(lat, lng);
   });
@@ -987,5 +1002,19 @@ function drawDesignPreview(points = [], front = null) {
     context.moveTo(origin[0], origin[1]);
     context.lineTo(vec[0], vec[1]);
     context.stroke();
+  }
+}
+
+async function fetchGeo(jobId) {
+  if (!geoLayer || !jobId) return;
+  try {
+    const resp = await fetch(`/jobs/${jobId}/geo`);
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    geoLayer.clearLayers();
+    geoLayer.addData(data.features || []);
+    mapStatus.textContent = `Parcels completed: ${data.progress.completed}/${data.progress.total}`;
+  } catch (err) {
+    // fail silently to avoid UI noise
   }
 }

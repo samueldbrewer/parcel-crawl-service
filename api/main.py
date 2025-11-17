@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -18,7 +19,8 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {"request": request})
+    maptiler_key = os.getenv("MAPTILER_KEY", "")
+    return templates.TemplateResponse("index.html", {"request": request, "maptiler_key": maptiler_key})
 
 
 @app.get("/architecture", response_class=HTMLResponse)

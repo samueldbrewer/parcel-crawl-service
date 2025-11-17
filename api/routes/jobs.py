@@ -140,6 +140,40 @@ def add_download_urls(job_id: str, artifacts: dict[str, object], request: Reques
     inject(artifacts)
 
 
+@router.get("/{job_id}/geo")
+async def read_job_geo(job_id: str, request: Request) -> dict[str, object]:
+    """Return GeoJSON features for parcel best footprints and basic progress."""
+    workspace = JOB_STORAGE / job_id
+    output_dir = workspace / "outputs"
+    if not output_dir.exists():
+        raise HTTPException(status_code=404, detail="Outputs not available yet.")
+    snapshot = build_output_snapshot(output_dir)
+    artifacts = snapshot.get("artifacts", {})
+    parcels = artifacts.get("parcels") or []
+    features: list[dict[str, object]] = []
+    total_parcels = len(parcels)
+    for parcel in parcels:
+        placements_path = Path(parcel.get("placements_json") or "")
+        geom = None
+        props: dict[str, object] = {"parcel_id": parcel.get("parcel_id")}
+        if placements_path.exists():
+            try:
+                data = json.loads(placements_path.read_text())
+                geom = data.get("best_footprint_geojson")
+                # include top summary if present
+                if data.get("summary"):
+                    props.update(data["summary"])
+            except json.JSONDecodeError:
+                geom = None
+        if geom:
+            features.append({"type": "Feature", "geometry": geom, "properties": props})
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "progress": {"completed": len(features), "total": total_parcels},
+    }
+
+
 def update_job_status(
     job_id: str,
     status: str,
