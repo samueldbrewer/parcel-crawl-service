@@ -29,7 +29,10 @@ def _page_ctx(request: Request, page: str, title: str, subtitle: str) -> dict[st
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request) -> HTMLResponse:
-    return HTMLResponse("<!DOCTYPE html><html><body><p>blank</p></body></html>")
+    return templates.TemplateResponse(
+        "map.html",
+        {"request": request, "maptiler_key": os.getenv("MAPTILER_KEY", "")},
+    )
 
 
 @app.get("/architecture", response_class=HTMLResponse)
