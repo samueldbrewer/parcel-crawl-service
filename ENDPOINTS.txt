@@ -1,0 +1,61 @@
+# Parcel Crawl Service Endpoints
+
+Base URL: http://localhost:8000
+
+## Health
+- GET /health
+  - Returns service status and upload target info.
+
+## Jobs
+- POST /jobs
+  - Submit a crawl job
+  - Body (JSON): {
+      "address": "<string>",
+      "dxf_url": "<http or file URL>",
+      "config": { ... optional crawl parameters ... },
+      "footprint_points": [[x, y], ...],
+      "front_direction": [x, y]
+    }
+- GET /jobs/{job_id}
+  - Returns job status/result/manifest.
+- GET /jobs/{job_id}/log
+  - Streams crawl log for the job.
+- GET /jobs/{job_id}/outputs/{path}
+  - Download job artifacts (PNG/JSON, etc.)
+
+## File Uploads
+- POST /files
+  - Multipart upload: field name "file"; stores to upload root and returns URLs for download and file:// usage.
+- GET /files
+  - Lists stored files.
+- GET /files/{filename}
+  - Downloads a stored file.
+- DELETE /files/{filename}
+  - Deletes a stored file from storage.
+- GET /files/{filename}/geometry
+  - Returns extracted DXF polylines as JSON.
+- POST /files/{filename}/shrinkwrap
+  - Body (JSON): {
+      "rectangle_points": [[x, y], ...],
+      "front_points": [[x, y], ...]
+    }
+  - Runs shrink-wrap and returns geometry/frontage info.
+
+## Designs
+- GET /designs
+  - Lists available designs.
+- GET /designs/{design_id}
+  - Fetch a specific design.
+
+## Geocode
+- GET /geocode/reverse?lat={lat}&lon={lon}
+  - Reverse geocode using OSM Nominatim.
+
+## Debug
+- GET /debug/env
+  - Returns selected environment details.
+
+Notes:
+- OpenAPI docs: GET /docs
+- JSON schema: GET /openapi.json
+- Authentication: none by default. Restrict at the ingress if needed.
