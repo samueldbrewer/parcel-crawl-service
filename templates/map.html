@@ -28,12 +28,20 @@
       <div id="map" class="map-frame"></div>
       <div class="panel-footer">
         <p class="placeholder">Debug log</p>
-        <div id="mapDebug" class="log-window" aria-live="polite"></div>
+        <div id="mapDebug" class="log-window" aria-live="polite">Waiting for map script…</div>
       </div>
     </section>
   </main>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/static/app.js"></script>
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    defer
+    onerror="(function(){var el=document.getElementById('mapDebug'); if(el){el.textContent='Failed to load Leaflet from CDN.';}})();"
+  ></script>
+  <script
+    src="/static/app.js"
+    defer
+    onerror="(function(){var el=document.getElementById('mapDebug'); if(el){el.textContent='Failed to load /static/app.js (check static mount).';}})();"
+  ></script>
 </body>
 </html>

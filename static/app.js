@@ -20,6 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
     log(message);
   };
 
+  log('Map bundle loaded; initializing...');
+
   if (!mapEl) {
     log('Map container not found on page.');
     return;
