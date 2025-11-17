@@ -33,6 +33,35 @@
     </section>
   </main>
 
+  <script>
+    // Inline bootstrap so we get logs even if external scripts fail.
+    (function () {
+      const logEl = document.getElementById('mapDebug');
+      const append = (message) => {
+        if (!logEl) return;
+        const line = document.createElement('div');
+        line.className = 'log-entry';
+        const timestamp = new Date().toISOString().replace('T', ' ').split('.')[0];
+        line.textContent = `[${timestamp}] ${message}`;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+      };
+
+      window.mapBootstrapLog = append;
+      append('Inline bootstrap running…');
+
+      fetch('/static/app.js', { method: 'HEAD' })
+        .then((resp) => append(`/static/app.js HEAD ${resp.status} ${resp.statusText}`))
+        .catch((err) => append(`Failed to reach /static/app.js: ${err.message}`));
+
+      setTimeout(() => {
+        if (!window.__MAP_APP_JS_LOADED) {
+          append('app.js did not execute within 4s. Possible CSP/404.');
+        }
+      }, 4000);
+    })();
+  </script>
+
   <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     defer

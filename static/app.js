@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
+  window.__MAP_APP_JS_LOADED = true;
+
   const mapEl = document.getElementById('map');
   const statusEl = document.getElementById('mapStatus');
   const logEl = document.getElementById('mapDebug');
@@ -21,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   log('Map bundle loaded; initializing...');
+  if (typeof window.mapBootstrapLog === 'function') {
+    window.mapBootstrapLog('app.js executed successfully.');
+  }
 
   if (!mapEl) {
     log('Map container not found on page.');
