@@ -52,6 +52,7 @@ body {
 
 .map-frame {
   height: 520px;
+  width: 100%;
   border: 1px solid #334155;
   border-radius: 8px;
   overflow: hidden;
