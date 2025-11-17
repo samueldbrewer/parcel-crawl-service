@@ -6,9 +6,6 @@
   <title>LandLens Map Viewer</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="/static/app.css">
-  <script>
-    window.MAPTILER_KEY = "{{ maptiler_key|default('') }}";
-  </script>
 </head>
 <body>
   <main class="container">
@@ -16,17 +13,14 @@
       <div>
         <p class="eyebrow">LandLens</p>
         <h1>Map Viewer</h1>
-        <p class="subhead">Pan/zoom the map. Tiles use MapTiler if a key is provided, otherwise OSM.</p>
+        <p class="subhead">Pan/zoom the map. Tiles come from OpenStreetMap.</p>
       </div>
     </header>
 
     <section class="panel">
       <div class="panel-header">
         <h2>Map</h2>
-        <div class="panel-actions">
-          <p class="placeholder" id="mapStatus">Ready.</p>
-          <button class="ghost-button" type="button" id="toggleTiles">Use OSM fallback</button>
-        </div>
+        <p class="placeholder" id="mapStatus">Ready.</p>
       </div>
       <div id="map" class="map-frame"></div>
       <div class="panel-footer">
