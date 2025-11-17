@@ -29,49 +29,7 @@ def _page_ctx(request: Request, page: str, title: str, subtitle: str) -> dict[st
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        "designs.html",
-        _page_ctx(
-            request,
-            page="designs",
-            title="Design, save, and run parcel crawls.",
-            subtitle="Capture shrink-wrap footprints, reuse saved designs, and start crawls.",
-        ),
-    )
-
-
-@app.get("/designs", response_class=HTMLResponse)
-async def designs_page(request: Request) -> HTMLResponse:
-    return await root(request)
-
-
-@app.get("/map", response_class=HTMLResponse)
-async def map_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        "map.html",
-        _page_ctx(
-            request,
-            page="map",
-            title="Run crawls from the map.",
-            subtitle="Select a saved design, drop a pin, and watch overlays in real time.",
-        ),
-    )
-
-
-@app.get("/config", response_class=HTMLResponse)
-async def config_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        "config.html",
-        _page_ctx(request, page="config", title="Configure crawl defaults.", subtitle=""),
-    )
-
-
-@app.get("/jobs", response_class=HTMLResponse)
-async def jobs_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(
-        "jobs.html",
-        _page_ctx(request, page="jobs", title="Jobs dashboard.", subtitle="View current and recent jobs."),
-    )
+    return HTMLResponse("<!DOCTYPE html><html><body><p>blank</p></body></html>")
 
 
 @app.get("/architecture", response_class=HTMLResponse)
