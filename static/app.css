@@ -45,6 +45,12 @@ body {
   margin-bottom: 8px;
 }
 
+.panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .placeholder {
   color: #94a3b8;
   margin: 0;
@@ -56,6 +62,19 @@ body {
   border: 1px solid #334155;
   border-radius: 8px;
   overflow: hidden;
+}
+
+.ghost-button {
+  background: transparent;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.ghost-button:hover {
+  border-color: #64748b;
 }
 
 .panel-footer {
