@@ -1,3 +1,15 @@
+// Page detection
+const pageName = document.body.dataset.page || 'designs';
+
+// Common elements (status/log/details)
+const statusText = document.getElementById('statusText');
+const resultBox = document.getElementById('resultBox');
+const logTailBox = document.getElementById('logTail');
+const jobDetails = document.getElementById('jobDetails');
+const historyTableBody = document.querySelector('#historyTable tbody');
+const artifactsTableBody = document.querySelector('#artifactsTable tbody');
+
+// Designs page elements
 const filesTableBody = document.querySelector('#filesTable tbody');
 const refreshBtn = document.getElementById('refreshFiles');
 const uploadForm = document.getElementById('uploadForm');
@@ -5,27 +17,10 @@ const uploadFileInput = document.getElementById('uploadFile');
 const jobForm = document.getElementById('jobForm');
 const startButton = document.getElementById('startButton');
 const dxfSelect = document.getElementById('dxfSelect');
-const statusText = document.getElementById('statusText');
-const resultBox = document.getElementById('resultBox');
-const historyTableBody = document.querySelector('#historyTable tbody');
-const jobDetails = document.getElementById('jobDetails');
-const logTailBox = document.getElementById('logTail');
-const artifactsTableBody = document.querySelector('#artifactsTable tbody');
 const designsList = document.getElementById('designsList');
 const saveDesignBtn = document.getElementById('saveDesign');
 const designNameInput = document.getElementById('designName');
-const tabs = document.querySelectorAll('.tab');
-const tabPanels = document.querySelectorAll('.tab-panel');
-const mapDesignSelect = document.getElementById('mapDesignSelect');
-const mapStatus = document.getElementById('mapStatus');
-const mapAddressInput = document.getElementById('mapAddress');
-const cfgCycles = document.getElementById('cfgCycles');
-const cfgBuffer = document.getElementById('cfgBuffer');
-const cfgRotation = document.getElementById('cfgRotation');
-const cfgScoreWorkers = document.getElementById('cfgScoreWorkers');
 const designPreview = document.getElementById('designPreview');
-const mapProgress = document.getElementById('mapProgress');
-const mapStatus = document.getElementById('mapStatus');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -33,12 +28,28 @@ const closeCaptureBtn = document.getElementById('closeCapture');
 const applyCaptureBtn = document.getElementById('applyCapture');
 const footprintSummary = document.getElementById('footprintSummary');
 const frontSummary = document.getElementById('frontSummary');
-
 const canvas = document.getElementById('captureCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 const footprintModeBtn = document.getElementById('footprintMode');
 const frontModeBtn = document.getElementById('frontMode');
 const clearCanvasBtn = document.getElementById('clearCanvas');
+
+// Map page elements
+const mapDesignSelect = document.getElementById('mapDesignSelect');
+const mapStatus = document.getElementById('mapStatus');
+const mapAddressInput = document.getElementById('mapAddress');
+const mapProgress = document.getElementById('mapProgress');
+
+// Config elements
+const cfgCycles = document.getElementById('cfgCycles');
+const cfgBuffer = document.getElementById('cfgBuffer');
+const cfgRotation = document.getElementById('cfgRotation');
+const cfgScoreWorkers = document.getElementById('cfgScoreWorkers');
+
+// Jobs page elements
+const jobsTableBody = document.querySelector('#jobsTable tbody');
+const refreshJobsBtn = document.getElementById('refreshJobs');
+const jobsDetailBox = document.getElementById('jobsDetailBox');
 
 const padding = 20;
 let pollTimer = null;
@@ -532,16 +543,7 @@ jobForm.addEventListener('submit', handleJob);
 footprintModeBtn.addEventListener('click', () => { captureMode = 'footprint'; });
 frontModeBtn.addEventListener('click', () => { captureMode = 'front'; });
 
-refreshFiles();
-recomputeViewBox();
-drawCanvas();
-updateSummaries();
-updateStartButton();
-refreshDesigns();
-saveDesignBtn.disabled = true;
-initTabs();
-initMapTab();
-renderJobDetails(null);
+initPage();
 
 function renderJobDetails(job) {
   if (!job) {
@@ -838,25 +840,13 @@ saveDesignBtn.addEventListener('click', async () => {
 });
 
 function initTabs() {
-  tabs.forEach((tab) => {
-    tab.addEventListener('click', () => {
-      tabs.forEach((t) => t.classList.remove('active'));
-      tabPanels.forEach((panel) => panel.classList.remove('active'));
-      tab.classList.add('active');
-      const target = tab.dataset.tab;
-      const panel = document.querySelector(`.tab-panel[data-tab-panel="${target}"]`);
-      if (panel) panel.classList.add('active');
-      if (target === 'map' && mapInstance) {
-        mapInstance.invalidateSize();
-      }
-    });
-  });
+  // No-op for multi-page layout
 }
 
 function initMapTab() {
   // Populate map design selector from saved designs list
   const syncDesignSelect = () => {
-    if (!mapDesignSelect) return;
+    if (!mapDesignSelect || !designsList) return;
     mapDesignSelect.innerHTML = '<option value="">-- Select a saved design --</option>';
     designsList.querySelectorAll('li').forEach((li) => {
       const slug = li.dataset.slug;
@@ -868,12 +858,13 @@ function initMapTab() {
       mapDesignSelect.appendChild(option);
     });
   };
-  // Sync when designs refreshed
-  const observer = new MutationObserver(syncDesignSelect);
-  observer.observe(designsList, { childList: true });
+  if (designsList) {
+    const observer = new MutationObserver(syncDesignSelect);
+    observer.observe(designsList, { childList: true });
+  }
   syncDesignSelect();
 
-  // Basic Leaflet map using OSM tiles
+  // Leaflet
   if (!document.getElementById('map')) return;
   const script = document.createElement('script');
   script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
