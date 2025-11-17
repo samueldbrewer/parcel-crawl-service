@@ -11,6 +11,18 @@ const historyTableBody = document.querySelector('#historyTable tbody');
 const jobDetails = document.getElementById('jobDetails');
 const logTailBox = document.getElementById('logTail');
 const artifactsTableBody = document.querySelector('#artifactsTable tbody');
+const designsList = document.getElementById('designsList');
+const saveDesignBtn = document.getElementById('saveDesign');
+const designNameInput = document.getElementById('designName');
+const tabs = document.querySelectorAll('.tab');
+const tabPanels = document.querySelectorAll('.tab-panel');
+const mapDesignSelect = document.getElementById('mapDesignSelect');
+const mapStatus = document.getElementById('mapStatus');
+const mapAddressInput = document.getElementById('mapAddress');
+const cfgCycles = document.getElementById('cfgCycles');
+const cfgBuffer = document.getElementById('cfgBuffer');
+const cfgRotation = document.getElementById('cfgRotation');
+const cfgScoreWorkers = document.getElementById('cfgScoreWorkers');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -400,6 +412,7 @@ applyCaptureBtn.addEventListener('click', async () => {
     setStatus('Shrink-wrap captured. Ready to start crawl.');
     startButton.disabled = false;
     startButton.textContent = 'Start Crawl';
+    saveDesignBtn.disabled = false;
   } catch (err) {
     setStatus(`Shrink-wrap failed: ${err}`);
   }
@@ -517,6 +530,10 @@ recomputeViewBox();
 drawCanvas();
 updateSummaries();
 updateStartButton();
+refreshDesigns();
+saveDesignBtn.disabled = true;
+initTabs();
+initMapTab();
 
 function renderJobDetails(job) {
   if (!job) {
@@ -737,4 +754,186 @@ async function fetchJobArtifacts(jobId) {
   } catch (err) {
     artifactsTableBody.innerHTML = `<tr><td colspan="2" class="placeholder">Failed to load artifacts: ${err}</td></tr>`;
   }
+}
+
+async function refreshDesigns() {
+  try {
+    const resp = await fetch('/designs');
+    if (!resp.ok) throw new Error(await resp.text());
+    const designs = await resp.json();
+    designsList.innerHTML = '';
+    if (!designs.length) {
+      designsList.innerHTML = '<li class="placeholder">No designs saved yet.</li>';
+      return;
+    }
+    designs.forEach((design) => {
+      const li = document.createElement('li');
+      li.textContent = `${design.name} (${design.slug})`;
+      li.dataset.slug = design.slug;
+      li.dataset.dxfUrl = design.dxf_url;
+      li.dataset.footprint = JSON.stringify(design.footprint_points || []);
+      li.dataset.front = JSON.stringify(design.front_direction || []);
+      designsList.appendChild(li);
+    });
+  } catch (err) {
+    designsList.innerHTML = `<li class="placeholder">Failed to load designs: ${err}</li>`;
+  }
+}
+
+saveDesignBtn.addEventListener('click', async () => {
+  if (!footprintWorld.length || !frontVector) {
+    alert('Capture a footprint and front direction first.');
+    return;
+  }
+  const name = designNameInput.value.trim();
+  if (!name) {
+    alert('Enter a design name.');
+    return;
+  }
+  const option = dxfSelect.options[dxfSelect.selectedIndex];
+  const dxfUrl = option ? option.value : '';
+  if (!dxfUrl) {
+    alert('Select a DXF before saving a design.');
+    return;
+  }
+  const payload = {
+    name,
+    dxf_url: dxfUrl,
+    footprint_points: footprintWorld,
+    front_direction: frontVector,
+  };
+  try {
+    const resp = await fetch('/designs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    setStatus(`Saved design "${name}".`);
+    designNameInput.value = '';
+    await refreshDesigns();
+  } catch (err) {
+    setStatus(`Save design failed: ${err}`);
+  }
+});
+
+function initTabs() {
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      tabs.forEach((t) => t.classList.remove('active'));
+      tabPanels.forEach((panel) => panel.classList.remove('active'));
+      tab.classList.add('active');
+      const target = tab.dataset.tab;
+      const panel = document.querySelector(`.tab-panel[data-tab-panel="${target}"]`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+}
+
+function initMapTab() {
+  // Populate map design selector from saved designs list
+  const syncDesignSelect = () => {
+    if (!mapDesignSelect) return;
+    mapDesignSelect.innerHTML = '<option value="">-- Select a saved design --</option>';
+    designsList.querySelectorAll('li').forEach((li) => {
+      const slug = li.dataset.slug;
+      if (!slug) return;
+      const name = li.textContent || slug;
+      const option = document.createElement('option');
+      option.value = slug;
+      option.textContent = name;
+      mapDesignSelect.appendChild(option);
+    });
+  };
+  // Sync when designs refreshed
+  const observer = new MutationObserver(syncDesignSelect);
+  observer.observe(designsList, { childList: true });
+  syncDesignSelect();
+
+  // Basic Leaflet map using OSM tiles
+  if (!document.getElementById('map')) return;
+  const script = document.createElement('script');
+  script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  script.integrity = 'sha256-pMh7CkP0iE1JfTIyekN3rN6QYP8K9PsM0qzA+3F3mXY=';
+  script.crossOrigin = '';
+  script.onload = () => {
+    initLeafletMap(syncDesignSelect);
+  };
+  document.head.appendChild(script);
+  const css = document.createElement('link');
+  css.rel = 'stylesheet';
+  css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+  document.head.appendChild(css);
+}
+
+function initLeafletMap(onDesignsReady) {
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return;
+  const map = L.map(mapEl).setView([37.8, -96], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(map);
+  let marker = null;
+
+  const startMapJob = async (lat, lng) => {
+    const selectedSlug = mapDesignSelect.value;
+    if (!selectedSlug) {
+      mapStatus.textContent = 'Select a saved design first.';
+      return;
+    }
+    const li = Array.from(designsList.querySelectorAll('li')).find((item) => item.dataset.slug === selectedSlug);
+    if (!li) {
+      mapStatus.textContent = 'Design not found.';
+      return;
+    }
+    const footprint = JSON.parse(li.dataset.footprint || '[]');
+    const front = JSON.parse(li.dataset.front || '[]');
+    const dxfUrl = li.dataset.dxfUrl || '';
+    if (!dxfUrl) {
+      mapStatus.textContent = 'Design missing DXF URL.';
+      return;
+    }
+    const address = mapAddressInput.value.trim() || `Pin at ${lat.toFixed(5)},${lng.toFixed(5)}`;
+    const payload = {
+      address,
+      dxf_url: dxfUrl,
+      config: {
+        cycles: Number(cfgCycles.value || 1),
+        buffer: Number(cfgBuffer.value || 80),
+        rotation_step: Number(cfgRotation.value || 15),
+        score_workers: Number(cfgScoreWorkers.value || 1),
+      },
+      footprint_points: footprint,
+      front_direction: front,
+    };
+    try {
+      mapStatus.textContent = 'Starting crawl from map pin…';
+      const resp = await fetch('/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      const job = await resp.json();
+      setStatus(`Job ${job.id} queued from map pin.`);
+      resultBox.textContent = JSON.stringify(job, null, 2);
+      updateHistory(job);
+      renderJobDetails(job);
+      pollJob(job.id);
+      mapStatus.textContent = `Job ${job.id} queued (pin ${lat.toFixed(5)},${lng.toFixed(5)}).`;
+    } catch (err) {
+      mapStatus.textContent = `Failed to start crawl: ${err}`;
+    }
+  };
+
+  map.on('click', (evt) => {
+    const { lat, lng } = evt.latlng;
+    if (marker) marker.remove();
+    marker = L.marker([lat, lng]).addTo(map);
+    mapStatus.textContent = `Pin at ${lat.toFixed(5)}, ${lng.toFixed(5)}. Starting crawl…`;
+    startMapJob(lat, lng);
+  });
+
+  if (onDesignsReady) onDesignsReady();
 }
