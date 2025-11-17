@@ -37,6 +37,7 @@
     // Inline bootstrap so we get logs even if external scripts fail.
     (function () {
       const logEl = document.getElementById('mapDebug');
+      const assetPath = '/static/map-viewer.js';
       const appendLine = (text) => {
         if (!logEl) return;
         const line = document.createElement('div');
@@ -54,40 +55,40 @@
       window.mapBootstrapLog = append;
       append('Inline bootstrap running…');
 
-      fetch('/static/app.js', { method: 'HEAD' })
-        .then((resp) => append(`/static/app.js HEAD ${resp.status} ${resp.statusText}`))
-        .catch((err) => append(`Failed to reach /static/app.js: ${err.message}`));
+      fetch(assetPath, { method: 'HEAD' })
+        .then((resp) => append(`${assetPath} HEAD ${resp.status} ${resp.statusText}`))
+        .catch((err) => append(`Failed to reach ${assetPath}: ${err.message}`));
 
       // Probe the actual payload so we can see if HTML is being served instead.
-      fetch('/static/app.js', { method: 'GET' })
+      fetch(assetPath, { method: 'GET' })
         .then(async (resp) => {
           const body = (await resp.text()).slice(0, 200);
-          append(`/static/app.js GET ${resp.status} ${resp.statusText} (len ~${body.length})`);
-          append(`app.js snippet: ${body.replace(/\s+/g, ' ').trim().slice(0, 120)}${body.length > 120 ? '…' : ''}`);
+          append(`${assetPath} GET ${resp.status} ${resp.statusText} (len ~${body.length})`);
+          append(`map-viewer snippet: ${body.replace(/\s+/g, ' ').trim().slice(0, 120)}${body.length > 120 ? '…' : ''}`);
         })
-        .catch((err) => append(`GET /static/app.js failed: ${err.message}`));
+        .catch((err) => append(`GET ${assetPath} failed: ${err.message}`));
 
       // If app.js never executes, try a cache-busting re-insert.
       setTimeout(() => {
-        if (window.__MAP_APP_JS_LOADED) return;
-        append('app.js still not executed; injecting fallback loader...');
+        if (window.__MAP_VIEWER_JS_LOADED) return;
+        append('map-viewer.js still not executed; injecting fallback loader...');
         const s = document.createElement('script');
-        s.src = `/static/app.js?v=${Date.now()}`;
+        s.src = `${assetPath}?v=${Date.now()}`;
         s.defer = true;
-        s.onload = () => append('Fallback app.js tag loaded.');
-        s.onerror = () => append('Fallback app.js failed to load.');
+        s.onload = () => append('Fallback map-viewer.js tag loaded.');
+        s.onerror = () => append('Fallback map-viewer.js failed to load.');
         document.body.appendChild(s);
       }, 1500);
 
       setTimeout(() => {
-        if (!window.__MAP_APP_JS_LOADED) {
-          append('app.js did not execute within 4s. Possible CSP/404.');
+        if (!window.__MAP_VIEWER_JS_LOADED) {
+          append('map-viewer.js did not execute within 4s. Possible CSP/404.');
         }
       }, 4000);
 
       setTimeout(() => {
-        if (!window.__MAP_APP_JS_LOADED) {
-          append('app.js still not running after fallback.');
+        if (!window.__MAP_VIEWER_JS_LOADED) {
+          append('map-viewer.js still not running after fallback.');
         }
       }, 8000);
     })();
@@ -99,9 +100,9 @@
     onerror="(function(){if(window.mapBootstrapLog){window.mapBootstrapLog('Failed to load Leaflet from CDN.');}})();"
   ></script>
   <script
-    src="/static/app.js"
+    src="/static/map-viewer.js"
     defer
-    onerror="(function(){if(window.mapBootstrapLog){window.mapBootstrapLog('Failed to load /static/app.js (check static mount).');}})();"
+    onerror="(function(){if(window.mapBootstrapLog){window.mapBootstrapLog('Failed to load /static/map-viewer.js (check static mount).');}})();"
   ></script>
 </body>
 </html>
