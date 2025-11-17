@@ -23,6 +23,8 @@ const cfgCycles = document.getElementById('cfgCycles');
 const cfgBuffer = document.getElementById('cfgBuffer');
 const cfgRotation = document.getElementById('cfgRotation');
 const cfgScoreWorkers = document.getElementById('cfgScoreWorkers');
+const designPreview = document.getElementById('designPreview');
+const mapProgress = document.getElementById('mapProgress');
 
 const captureModal = document.getElementById('captureModal');
 const openCaptureBtn = document.getElementById('openCapture');
@@ -534,6 +536,7 @@ refreshDesigns();
 saveDesignBtn.disabled = true;
 initTabs();
 initMapTab();
+renderJobDetails(null);
 
 function renderJobDetails(job) {
   if (!job) {
@@ -773,6 +776,11 @@ async function refreshDesigns() {
       li.dataset.dxfUrl = design.dxf_url;
       li.dataset.footprint = JSON.stringify(design.footprint_points || []);
       li.dataset.front = JSON.stringify(design.front_direction || []);
+      li.addEventListener('click', () => {
+        const footprint = JSON.parse(li.dataset.footprint || '[]');
+        const front = JSON.parse(li.dataset.front || '[]');
+        drawDesignPreview(footprint, front);
+      });
       designsList.appendChild(li);
     });
   } catch (err) {
@@ -936,4 +944,48 @@ function initLeafletMap(onDesignsReady) {
   });
 
   if (onDesignsReady) onDesignsReady();
+}
+
+function drawDesignPreview(points = [], front = null) {
+  if (!designPreview) return;
+  const context = designPreview.getContext('2d');
+  context.clearRect(0, 0, designPreview.width, designPreview.height);
+  if (!points.length) return;
+  const xs = points.map((p) => p[0]);
+  const ys = points.map((p) => p[1]);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const paddingPx = 10;
+  const scale = Math.min(
+    (designPreview.width - 2 * paddingPx) / Math.max(1e-6, maxX - minX),
+    (designPreview.height - 2 * paddingPx) / Math.max(1e-6, maxY - minY),
+  );
+  const toCanvas = ([x, y]) => {
+    const cx = (x - minX) * scale + paddingPx;
+    const cy = designPreview.height - ((y - minY) * scale + paddingPx);
+    return [cx, cy];
+  };
+
+  context.strokeStyle = '#93c5fd';
+  context.lineWidth = 2;
+  context.beginPath();
+  points.forEach((pt, idx) => {
+    const [cx, cy] = toCanvas(pt);
+    if (idx === 0) context.moveTo(cx, cy);
+    else context.lineTo(cx, cy);
+  });
+  context.closePath();
+  context.stroke();
+
+  if (front) {
+    const origin = toCanvas(points[0]);
+    const vec = [origin[0] + front[0] * 20, origin[1] - front[1] * 20];
+    context.strokeStyle = '#22c55e';
+    context.beginPath();
+    context.moveTo(origin[0], origin[1]);
+    context.lineTo(vec[0], vec[1]);
+    context.stroke();
+  }
 }

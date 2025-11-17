@@ -82,6 +82,9 @@
             <p><strong>Front vector:</strong> <span id="frontSummary">None</span></p>
           </div>
         </div>
+        <div class="design-preview">
+          <canvas id="designPreview" width="300" height="200"></canvas>
+        </div>
         <div class="design-save">
           <input type="text" id="designName" placeholder="Design name" />
           <button type="button" id="saveDesign" disabled>Save Design</button>
@@ -160,6 +163,7 @@
             <input type="text" id="mapAddress" placeholder="Pin will fill a lat/lng address if left blank" />
           </label>
           <p id="mapStatus" class="placeholder">Click the map to drop a pin.</p>
+          <div id="mapProgress" class="spinner hidden"></div>
         </div>
       </section>
 

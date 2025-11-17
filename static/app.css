@@ -278,6 +278,18 @@ button.danger:hover {
   overflow: auto;
 }
 
+.design-preview {
+  margin: 8px 0 12px;
+}
+
+#designPreview {
+  width: 100%;
+  max-width: 360px;
+  background: #0f172a;
+  border: 1px dashed #334155;
+  border-radius: 6px;
+}
+
 .tabs {
   display: flex;
   gap: 8px;
@@ -332,4 +344,21 @@ button.danger:hover {
   margin-top: 12px;
   display: grid;
   gap: 10px;
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #93c5fd;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.hidden {
+  display: none !important;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
