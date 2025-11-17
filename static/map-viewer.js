@@ -42,6 +42,19 @@ document.addEventListener('DOMContentLoaded', () => {
   setStatus('Initializing map with OpenStreetMap tiles...');
   log('Bootstrap details', { tileProvider: 'OpenStreetMap' });
 
+  // Paint a repeating tile as a visual fallback before Leaflet renders.
+  const fallbackTileUrl = 'https://tile.openstreetmap.org/0/0/0.png';
+  const fallbackTile = new Image();
+  fallbackTile.onload = () => {
+    mapEl.style.backgroundImage = `url(${fallbackTileUrl})`;
+    mapEl.style.backgroundSize = '256px 256px';
+    mapEl.style.backgroundRepeat = 'repeat';
+    mapEl.style.backgroundPosition = 'center';
+    log('Applied fallback OSM tile background.');
+  };
+  fallbackTile.onerror = () => log('Failed to load fallback OSM tile background.');
+  fallbackTile.src = fallbackTileUrl;
+
   let map;
   try {
     map = L.map(mapEl, { preferCanvas: true }).setView([37.8, -96], 4);
@@ -58,6 +71,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   tiles.on('load', () => {
     setStatus('OpenStreetMap tiles loaded.');
+    // Clear fallback background once real tiles are in.
+    mapEl.style.backgroundImage = '';
   });
 
   tiles.on('tileerror', (event) => {
