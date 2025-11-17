@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from api.routes import jobs, uploads, downloads, designs, geocode
+from api.routes import jobs, uploads, downloads, designs, geocode, debug
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 TEMPLATES_DIR = BASE_DIR / "templates"
@@ -39,3 +39,4 @@ app.include_router(uploads.router, prefix="/files", tags=["files"])
 app.include_router(downloads.router, prefix="/jobs", tags=["job-files"])
 app.include_router(designs.router, prefix="/designs", tags=["designs"])
 app.include_router(geocode.router, prefix="/geocode", tags=["geocode"])
+app.include_router(debug.router, prefix="/debug", tags=["debug"])

@@ -58,6 +58,11 @@ async def read_job(job_id: str) -> models.JobRecord:
     return job
 
 
+@router.get("/", response_model=list[models.JobRecord])
+async def list_jobs() -> list[models.JobRecord]:
+    return list(JOBS.values())
+
+
 @router.get("/{job_id}/logs")
 async def read_job_logs(job_id: str, lines: int = 200) -> dict[str, object]:
     log_path = JOB_STORAGE / job_id / "crawl.log"
@@ -114,7 +119,7 @@ def add_download_urls(job_id: str, artifacts: dict[str, object], request: Reques
         except ValueError:
             return None
 
-    def inject(obj: object):
+def inject(obj: object):
         if isinstance(obj, dict):
             for key, value in list(obj.items()):
                 if isinstance(value, str) and value.startswith("/"):
