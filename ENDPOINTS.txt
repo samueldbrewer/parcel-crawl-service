@@ -1,6 +1,8 @@
 # Parcel Crawl Service Endpoints
 
-Base URL: http://localhost:8000
+Base URLs:
+- Local:  http://localhost:8000
+- Remote: https://landlens.up.railway.app
 
 ## Health
 - GET /health

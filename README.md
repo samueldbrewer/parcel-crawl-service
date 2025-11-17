@@ -171,6 +171,29 @@ Examples:
 Run it with `python3 remote_client_gui.py` (requires the same dependencies as the crawler). Configure the
 API base URL if you’re targeting a different Railway environment.
 
+## Live service URL and endpoints
+
+- Production base: `https://landlens.up.railway.app`
+- Local dev base: `http://localhost:8000`
+- OpenAPI docs: `/docs`
+
+Primary routes:
+
+- `POST /jobs` – submit crawl job
+- `GET /jobs/{job_id}` – job status/result
+- `GET /jobs/{job_id}/log` – crawl log stream
+- `GET /jobs/{job_id}/outputs/{path}` – download artifacts
+- `POST /files` – upload DXF (multipart `file`)
+- `GET /files` – list uploads
+- `GET /files/{filename}` – download file
+- `DELETE /files/{filename}` – delete file
+- `GET /files/{filename}/geometry` – DXF polylines JSON
+- `POST /files/{filename}/shrinkwrap` – run shrink-wrap
+- `GET /designs` / `GET /designs/{id}` – design metadata
+- `GET /geocode/reverse?lat=&lon=` – reverse geocode
+- `GET /health` – service health
+- `GET /debug/env` – environment debug
+
 ## Deployment notes
 
 The Dockerfile installs all crawler dependencies, copies both `parcel_crawl_demo_v4.py`
