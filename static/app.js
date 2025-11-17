@@ -767,38 +767,53 @@ async function fetchJobArtifacts(jobId) {
 }
 
 async function refreshDesigns() {
+  const listEl = designsList;
+  const mapSelect = mapDesignSelect;
   try {
     const resp = await fetch('/designs');
     if (!resp.ok) throw new Error(await resp.text());
     const designs = await resp.json();
-    designsList.innerHTML = '';
-    if (!designs.length) {
-      designsList.innerHTML = '<li class="placeholder">No designs saved yet.</li>';
-      return;
+    if (listEl) {
+      listEl.innerHTML = '';
+      if (!designs.length) {
+        listEl.innerHTML = '<li class="placeholder">No designs saved yet.</li>';
+      } else {
+        designs.forEach((design) => {
+          const li = document.createElement('li');
+          li.textContent = `${design.name} (${design.slug})`;
+          li.dataset.slug = design.slug;
+          li.dataset.dxfUrl = design.dxf_url;
+          li.dataset.footprint = JSON.stringify(design.footprint_points || []);
+          li.dataset.front = JSON.stringify(design.front_direction || []);
+          li.addEventListener('click', () => {
+            const footprint = JSON.parse(li.dataset.footprint || '[]');
+            const front = JSON.parse(li.dataset.front || '[]');
+            drawDesignPreview(footprint, front);
+            selectedDesign = design;
+            footprintWorld = footprint;
+            frontVector = front;
+            shrinkwrapReady = true;
+            updateSummaries();
+            updateStartButton();
+            setStatus(`Loaded design "${design.name}" into the form.`);
+          });
+          listEl.appendChild(li);
+        });
+      }
     }
-    designs.forEach((design) => {
-      const li = document.createElement('li');
-      li.textContent = `${design.name} (${design.slug})`;
-      li.dataset.slug = design.slug;
-      li.dataset.dxfUrl = design.dxf_url;
-      li.dataset.footprint = JSON.stringify(design.footprint_points || []);
-      li.dataset.front = JSON.stringify(design.front_direction || []);
-      li.addEventListener('click', () => {
-        const footprint = JSON.parse(li.dataset.footprint || '[]');
-        const front = JSON.parse(li.dataset.front || '[]');
-        drawDesignPreview(footprint, front);
-        selectedDesign = design;
-        footprintWorld = footprint;
-        frontVector = front;
-        shrinkwrapReady = true;
-        updateSummaries();
-        updateStartButton();
-        setStatus(`Loaded design "${design.name}" into the form.`);
+    if (mapSelect) {
+      mapSelect.innerHTML = '<option value="">-- Select a saved design --</option>';
+      designs.forEach((design) => {
+        const option = document.createElement('option');
+        option.value = design.slug;
+        option.textContent = design.name;
+        mapSelect.appendChild(option);
       });
-      designsList.appendChild(li);
-    });
+    }
   } catch (err) {
-    designsList.innerHTML = `<li class="placeholder">Failed to load designs: ${err}</li>`;
+    if (listEl) {
+      listEl.innerHTML = `<li class="placeholder">Failed to load designs: ${err}</li>`;
+    }
   }
 }
 
@@ -845,24 +860,12 @@ function initTabs() {
 
 function initMapTab() {
   // Populate map design selector from saved designs list
-  const syncDesignSelect = () => {
-    if (!mapDesignSelect || !designsList) return;
-    mapDesignSelect.innerHTML = '<option value="">-- Select a saved design --</option>';
-    designsList.querySelectorAll('li').forEach((li) => {
-      const slug = li.dataset.slug;
-      if (!slug) return;
-      const name = li.textContent || slug;
-      const option = document.createElement('option');
-      option.value = slug;
-      option.textContent = name;
-      mapDesignSelect.appendChild(option);
-    });
-  };
+  const syncDesignSelect = () => refreshDesigns();
+  // If designs list exists, observe changes; otherwise we'll rely on refreshDesigns populating map select.
   if (designsList) {
     const observer = new MutationObserver(syncDesignSelect);
     observer.observe(designsList, { childList: true });
   }
-  syncDesignSelect();
 
   // Leaflet
   if (!document.getElementById('map')) return;
