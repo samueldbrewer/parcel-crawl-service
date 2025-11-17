@@ -57,3 +57,26 @@ body {
   border-radius: 8px;
   overflow: hidden;
 }
+
+.panel-footer {
+  margin-top: 12px;
+  border-top: 1px solid #334155;
+  padding-top: 8px;
+}
+
+.log-window {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  background: #0b1221;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  padding: 8px;
+  min-height: 80px;
+  max-height: 200px;
+  overflow-y: auto;
+  color: #cbd5e1;
+}
+
+.log-window .log-entry {
+  margin: 2px 0;
+  word-break: break-word;
+}
