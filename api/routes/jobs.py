@@ -63,6 +63,11 @@ async def list_jobs() -> list[models.JobRecord]:
     return list(JOBS.values())
 
 
+@router.get("", response_model=list[models.JobRecord])
+async def list_jobs_no_slash() -> list[models.JobRecord]:
+    return list(JOBS.values())
+
+
 @router.get("/{job_id}/logs")
 async def read_job_logs(job_id: str, lines: int = 200) -> dict[str, object]:
     log_path = JOB_STORAGE / job_id / "crawl.log"
