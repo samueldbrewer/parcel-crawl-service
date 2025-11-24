@@ -36,6 +36,8 @@ class JobRecord(JobStatus):
     config: Dict[str, Any] = Field(default_factory=dict)
     footprint_points: List[List[float]] | None = None
     front_direction: List[float] | None = None
+    log_tail: Optional[str] = None
+    log_available: bool = False
 
 
 class FileUploadResponse(BaseModel):

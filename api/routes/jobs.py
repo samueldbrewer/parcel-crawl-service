@@ -56,11 +56,11 @@ async def read_job(job_id: str) -> models.JobRecord:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    job_dict = job.dict()
     log_path = JOB_STORAGE / job_id / "crawl.log"
-    if log_path.exists():
-        job_dict["log_tail"] = read_log_tail(log_path, LOG_TAIL_LINES)
-    return job_dict
+    log_exists = log_path.exists()
+    job.log_available = log_exists
+    job.log_tail = read_log_tail(log_path, LOG_TAIL_LINES) if log_exists else ""
+    return job
 
 
 @router.get("/", response_model=list[models.JobRecord])
@@ -77,12 +77,20 @@ async def list_jobs_no_slash() -> list[models.JobRecord]:
 async def read_job_logs(job_id: str, lines: int = 200) -> dict[str, object]:
     log_path = JOB_STORAGE / job_id / "crawl.log"
     if not log_path.exists():
-        raise HTTPException(status_code=404, detail="Log not available yet.")
+        return {
+            "job_id": job_id,
+            "lines": 0,
+            "log_tail": "",
+            "available": False,
+            "detail": "Log not available yet.",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
     limit = max(1, min(lines, 2000))
     return {
         "job_id": job_id,
         "lines": limit,
         "log_tail": read_log_tail(log_path, limit),
+        "available": True,
         "updated_at": datetime.utcnow().isoformat() + "Z",
     }
 
@@ -150,8 +158,21 @@ async def read_job_geo(job_id: str, request: Request) -> dict[str, object]:
     """Return GeoJSON features for parcel best footprints and basic progress."""
     workspace = JOB_STORAGE / job_id
     output_dir = workspace / "outputs"
+    job = JOBS.get(job_id)
     if not output_dir.exists():
-        raise HTTPException(status_code=404, detail="Outputs not available yet.")
+        return {
+            "type": "FeatureCollection",
+            "features": [],
+            "progress": {
+                "completed": 0,
+                "total": 0,
+                "extra": {
+                    "outputs_available": False,
+                    "job_status": job.status if job else None,
+                    "log_available": (JOB_STORAGE / job_id / "crawl.log").exists(),
+                },
+            },
+        }
     snapshot = build_output_snapshot(output_dir)
     artifacts = snapshot.get("artifacts", {})
     parcels = artifacts.get("parcels") or []
@@ -175,7 +196,15 @@ async def read_job_geo(job_id: str, request: Request) -> dict[str, object]:
     return {
         "type": "FeatureCollection",
         "features": features,
-        "progress": {"completed": len(features), "total": total_parcels},
+        "progress": {
+            "completed": len(features),
+            "total": total_parcels,
+            "extra": {
+                "outputs_available": True,
+                "job_status": job.status if job else None,
+                "log_available": (JOB_STORAGE / job_id / "crawl.log").exists(),
+            },
+        },
     }
 
 
