@@ -62,3 +62,7 @@ Notes
 - Authentication: none enabled by default; restrict at ingress if needed.
 - Storage: job workspaces under storage/jobs; uploads under /data (override with DXF_UPLOAD_ROOT).
 - Worker uses `parcel_crawl_demo_v4.py` with flags built from `config` and the provided footprint/frontage when supplied.
+- Monitoring tips:
+  - `GET /jobs/{id}` includes `log_tail` so you can see the last lines from `crawl.log`. Use this to ensure the worker started and to check progress without separate log calls.
+  - `GET /jobs/{id}/geo` only returns features once the crawler writes outputs. If it’s empty and `log_tail` shows no activity, the job may still be queued or waiting for the worker. If `log_tail` shows cycles progressing but no GeoJSON, wait for the first cycle to finish.
+  - Cancel stuck jobs via `POST /jobs/{id}/cancel`; check `log_tail` first to avoid cancelling an active run mid-progress.
