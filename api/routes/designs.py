@@ -7,7 +7,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-DESIGN_ROOT = Path("storage/designs")
+import os
+
+DESIGN_ROOT = Path(os.getenv("DESIGN_STORAGE_ROOT", "/data/designs"))
 DESIGN_ROOT.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
