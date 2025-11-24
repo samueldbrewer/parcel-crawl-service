@@ -10,7 +10,7 @@ from starlette.routing import NoMatchFound
 
 from api import models
 from api.services import workers
-from worker.run_job import JOB_STORAGE, build_output_snapshot, read_log_tail
+from worker.run_job import JOB_STORAGE, build_output_snapshot, read_log_tail, LOG_TAIL_LINES
 
 router = APIRouter()
 
@@ -56,7 +56,11 @@ async def read_job(job_id: str) -> models.JobRecord:
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    return job
+    job_dict = job.dict()
+    log_path = JOB_STORAGE / job_id / "crawl.log"
+    if log_path.exists():
+        job_dict["log_tail"] = read_log_tail(log_path, LOG_TAIL_LINES)
+    return job_dict
 
 
 @router.get("/", response_model=list[models.JobRecord])
