@@ -14,6 +14,7 @@ import numpy as np
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from starlette.requests import Request
+from starlette.concurrency import run_in_threadpool
 
 from api import models
 from parcel_crawl_demo_v4 import (
@@ -198,9 +199,9 @@ async def delete_uploaded_file(filename: str) -> dict[str, object]:
 
 @router.get("/{filename}/preview")
 async def preview_footprint(filename: str) -> dict[str, object]:
-    ctx = _load_dxf_context(filename)
+    ctx = await run_in_threadpool(_load_dxf_context, filename)
     try:
-        profile, front_vec = prepare_footprint(Path(ctx["path"]))
+        profile, front_vec = await run_in_threadpool(prepare_footprint, Path(ctx["path"]))
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Failed to prepare footprint: {exc}") from exc
     coords = list(profile.geometry.exterior.coords)
@@ -220,7 +221,7 @@ async def preview_footprint(filename: str) -> dict[str, object]:
 
 @router.get("/{filename}/geometry")
 async def geometry_preview(filename: str) -> dict[str, object]:
-    ctx = _load_dxf_context(filename)
+    ctx = await run_in_threadpool(_load_dxf_context, filename)
     return {
         "paths": ctx["paths"],
     }
@@ -228,9 +229,9 @@ async def geometry_preview(filename: str) -> dict[str, object]:
 
 @router.post("/{filename}/shrinkwrap", response_model=models.ShrinkwrapResponse)
 async def shrinkwrap_from_selection(filename: str, payload: models.ShrinkwrapRequest) -> models.ShrinkwrapResponse:
-    ctx = _load_dxf_context(filename)
-    rect = _build_rectangle(payload.rectangle_points)
-    shrinked = shrinkwrap_polygon(rect, ctx["lines"])
+    ctx = await run_in_threadpool(_load_dxf_context, filename)
+    rect = await run_in_threadpool(_build_rectangle, payload.rectangle_points)
+    shrinked = await run_in_threadpool(shrinkwrap_polygon, rect, ctx["lines"])
     if shrinked.is_empty:
         raise HTTPException(status_code=400, detail="Shrink-wrap produced empty polygon.")
     coords = list(shrinked.exterior.coords)
