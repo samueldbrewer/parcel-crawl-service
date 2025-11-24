@@ -31,6 +31,11 @@ async def list_designs() -> list[dict[str, object]]:
     return designs
 
 
+@router.get("", response_model=list[dict[str, object]])
+async def list_designs_no_slash() -> list[dict[str, object]]:
+    return await list_designs()
+
+
 @router.post("/", response_model=dict[str, object])
 async def save_design(payload: dict[str, object]) -> dict[str, object]:
     name = (payload.get("name") or "").strip()
@@ -58,6 +63,11 @@ async def save_design(payload: dict[str, object]) -> dict[str, object]:
     target = DESIGN_ROOT / f"{slug}.json"
     target.write_text(json.dumps(record, indent=2))
     return record
+
+
+@router.post("", response_model=dict[str, object])
+async def save_design_no_slash(payload: dict[str, object]) -> dict[str, object]:
+    return await save_design(payload)
 
 
 @router.get("/{slug}", response_model=dict[str, object])
