@@ -59,7 +59,7 @@ def _process_job(job: JobRecord) -> None:
     job_routes.update_job_status(job.id, "running")
     payload = job.model_dump()
     try:
-        result = run_job(payload)
+        result = run_job(payload, should_cancel=lambda: is_cancelled(job_id))
     except JobExecutionError as exc:
         error_message = _format_error(exc)
         if is_cancelled(job_id):

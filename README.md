@@ -114,6 +114,7 @@ curl -s -X POST https://landlens.up.railway.app/files/<filename>/shrinkwrap \
 | `DXF_DOWNLOAD_TIMEOUT` | DXF download timeout in seconds (default 120). |
 | `DXF_UPLOAD_ROOT` | Directory where `/files` uploads will be stored (default `/data`). |
 | `DESIGN_STORAGE_ROOT` | Directory for saved designs (default `/data/designs`). |
+| `API_JOB_WORKERS` | Number of concurrent crawl jobs the API thread pool runs (default 2). |
 | `UPLOAD_TIMEOUT` | Client-side upload timeout used by `remote_client_gui.py` (default 900 seconds). |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated origins allowed via CORS middleware (defaults to Railway + localhost). |
 

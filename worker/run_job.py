@@ -10,9 +10,10 @@ import subprocess
 import sys
 from collections import deque
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import requests
+import time
 
 LOG = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ JOB_STORAGE = Path(os.getenv("JOB_STORAGE_ROOT", Path("storage") / "jobs")).reso
 JOB_STORAGE.mkdir(parents=True, exist_ok=True)
 DXF_TIMEOUT = int(os.getenv("DXF_DOWNLOAD_TIMEOUT", "120"))
 LOG_TAIL_LINES = int(os.getenv("JOB_LOG_TAIL_LINES", "200"))
+CANCELLED_EXIT_CODE = -999
 
 NUMERIC_FLAGS: Dict[str, str] = {
     "cycles": "--cycles",
@@ -62,7 +64,7 @@ class JobExecutionError(RuntimeError):
         self.context = context or {}
 
 
-def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
+def run_job(job: Dict[str, Any], should_cancel: Optional[Callable[[], bool]] = None) -> Dict[str, Any]:
     """Execute the crawl script for the supplied job payload."""
     job_id = job["id"]
     LOG.info("Job %s starting. Preparing workspace.", job_id)
@@ -81,9 +83,11 @@ def run_job(job: Dict[str, Any]) -> Dict[str, Any]:
     command = build_command(job, dxf_path, output_dir, workspace)
     log_path = workspace / "crawl.log"
     LOG.info("Job %s launching crawler: %s", job_id, format_command(command))
-    exit_code = execute(command, log_path)
+    exit_code = execute(command, log_path, should_cancel)
 
     if exit_code != 0:
+        if exit_code == CANCELLED_EXIT_CODE:
+            raise JobExecutionError("Job cancelled by user request.", {"job_id": job_id})
         context = {
             "workspace": str(workspace),
             "command": format_command(command),
@@ -207,18 +211,40 @@ def build_command(job: Dict[str, Any], dxf_path: Path, output_dir: Path, workspa
     return command
 
 
-def execute(command: List[str], log_path: Path) -> int:
+def execute(command: List[str], log_path: Path, should_cancel: Optional[Callable[[], bool]] = None) -> int:
     LOG.info("Starting crawl: %s", format_command(command))
+    env = os.environ.copy()
     with log_path.open("w", encoding="utf-8") as log_file:
-        process = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=SCRIPT_PATH.parent,
             stdout=log_file,
             stderr=subprocess.STDOUT,
             text=True,
-            env=os.environ.copy(),
+            env=env,
         )
-    return process.returncode
+        try:
+            while True:
+                if should_cancel and should_cancel():
+                    LOG.info("Cancellation requested; terminating crawler process.")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        LOG.warning("Crawler did not exit after terminate(); killing.")
+                        process.kill()
+                        process.wait()
+                    return CANCELLED_EXIT_CODE
+                ret = process.poll()
+                if ret is not None:
+                    return ret
+                time.sleep(1)
+        finally:
+            if process.poll() is None:
+                try:
+                    process.terminate()
+                except Exception:
+                    process.kill()
 
 
 def collect_summary(output_dir: Path) -> Dict[str, Any]:
