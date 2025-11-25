@@ -51,6 +51,42 @@ async def _create_job(payload: models.JobCreate) -> models.JobStatus:
     return models.JobStatus(id=job_id, status=record.status)
 
 
+@router.post("/{job_id}/cancel")
+async def cancel_job(job_id: str, payload: models.JobCancelRequest | None = None) -> dict[str, object]:
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status in {"completed", "failed", "cancelled"}:
+        return {
+            "cancelled": False,
+            "was_running": False,
+            "status": job.status,
+            "message": f"Job already {job.status}.",
+        }
+
+    reason = (payload.reason if payload and payload.reason else "Job cancelled via API.").strip()
+    result = workers.cancel(job_id)
+
+    if not result["was_running"]:
+        job.status = "cancelled"
+        job.error = reason
+        job.result = None
+        workers.cleanup(job_id)
+        message = "Job cancelled before start."
+    else:
+        job.status = "cancelling"
+        job.error = reason
+        message = "Cancellation requested; worker will stop when safe."
+
+    return {
+        "cancelled": True,
+        "was_running": result["was_running"],
+        "status": job.status,
+        "message": message,
+    }
+
+
 @router.get("/{job_id}", response_model=models.JobRecord)
 async def read_job(job_id: str) -> models.JobRecord:
     job = JOBS.get(job_id)

@@ -32,6 +32,7 @@ Jobs
 - GET /jobs/{job_id}/logs — tail of crawl.log (default 200 lines; `?lines=` up to 2000).
 - GET /jobs/{job_id}/artifacts — artifact manifest with download URLs injected for files under job outputs or uploads.
 - GET /jobs/{job_id}/geo — GeoJSON FeatureCollection of best footprints per parcel plus progress counts.
+- POST /jobs/{job_id}/cancel — cancel a queued/running job. Body (optional): `{ "reason": "user cancelled from dashboard" }`. Response reports whether the worker was already running; if so, status becomes `cancelling` until the worker observes the cancellation and exits.
 
 Job outputs (from parcel_crawl_demo_v4)
 - Stored under storage/jobs/{job_id}/outputs.

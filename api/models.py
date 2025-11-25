@@ -40,6 +40,13 @@ class JobRecord(JobStatus):
     log_available: bool = False
 
 
+class JobCancelRequest(BaseModel):
+    reason: Optional[str] = Field(
+        default="Job cancelled via API.",
+        description="Optional cancellation reason stored on the job record.",
+    )
+
+
 class FileUploadResponse(BaseModel):
     filename: str
     stored_path: str

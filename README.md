@@ -184,6 +184,7 @@ Primary routes:
 - `POST /jobs` – submit crawl job
 - `GET /jobs/{job_id}` – job status/result
 - `GET /jobs/{job_id}/log` – crawl log stream
+- `POST /jobs/{job_id}/cancel` – request cancellation (optional JSON `{ "reason": "..." }`)
 - `GET /jobs/{job_id}/outputs/{path}` – download artifacts
 - `POST /files` – upload DXF (multipart `file`)
 - `GET /files` – list uploads
