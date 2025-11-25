@@ -1393,6 +1393,9 @@ def evaluate_parcel(
     road_fetcher: Optional[Callable[[Tuple[float, float, float, float]], List[LineString]]] = None,
     skip_roads: bool = False,
     score_workers: int = 1,
+    progress_writer: Optional[
+        Callable[[Dict[str, object], Optional[Dict[str, object]], List[Dict[str, object]]], None]
+    ] = None,
 ) -> ParcelEvaluationResult:
     WARNING_COUNTS[ORIENTED_WARNING_KEY] = 0
     install_warning_capture()
@@ -1465,6 +1468,33 @@ def evaluate_parcel(
     placements: List[Dict[str, object]] = []
     best_placement: Optional[Dict[str, object]] = None
     best_composite = -math.inf
+    best_geometry: Optional[Polygon] = None
+
+    def emit_progress() -> None:
+        if not progress_writer:
+            return
+        try:
+            summary_snapshot = summarize_parcel_result(
+                parcel,
+                placements,
+                offset_step,
+                offset_range,
+                best_placement,
+            )
+            best_geojson = mapping(best_geometry) if best_geometry is not None else None
+            progress_writer(summary_snapshot, best_geojson, placements)
+        except Exception as exc:  # noqa: BLE001
+            logging.debug("Progress writer failed for %s: %s", parcel.parcel_id, exc)
+
+    def update_best_geometry() -> None:
+        nonlocal best_geometry
+        if best_placement is None:
+            return
+        try:
+            best_geometry = placement_to_geometry(best_placement, footprint_profile, parcel_geom)
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("Failed to reconstruct interim best geometry for %s: %s", parcel.parcel_id, exc)
+            best_geometry = None
 
     def record_placement(placement: Dict[str, object]) -> None:
         nonlocal best_placement, best_composite
@@ -1473,6 +1503,8 @@ def evaluate_parcel(
         if composite_value > best_composite:
             best_composite = composite_value
             best_placement = placement
+            update_best_geometry()
+        emit_progress()
 
     use_pool = score_workers > 1 and len(tasks) > 0
     if use_pool:
@@ -1524,18 +1556,31 @@ def evaluate_parcel(
         finally:
             WORKER_CONTEXT.clear()
 
-    best_geometry: Optional[Polygon] = None
-    if best_placement:
-        try:
-            best_geometry = placement_to_geometry(best_placement, footprint_profile, parcel_geom)
-        except Exception as exc:  # noqa: BLE001
-            logging.warning(
-                "Failed to reconstruct best geometry for %s (%s).",
-                parcel.parcel_id,
-                exc,
-            )
-            best_geometry = None
+    if best_placement and best_geometry is None:
+        update_best_geometry()
 
+    summary = summarize_parcel_result(parcel, placements, offset_step, offset_range, best_placement)
+
+    disqualified = not placements
+    return ParcelEvaluationResult(
+        parcel=parcel,
+        placements=placements,
+        summary=summary,
+        best_placement=best_placement,
+        best_geometry=best_geometry,
+        buildable=buildable,
+        roads=list(roads),
+        disqualified=disqualified,
+    )
+
+
+def summarize_parcel_result(
+    parcel: ParcelFeature,
+    placements: List[Dict[str, object]],
+    offset_step: float,
+    offset_range: float,
+    best_placement: Optional[Dict[str, object]],
+) -> Dict[str, object]:
     summary: Dict[str, object] = {
         "parcel_id": parcel.parcel_id,
         "address": parcel.address,
@@ -1551,7 +1596,6 @@ def evaluate_parcel(
     else:
         summary["average_composite"] = 0.0
         summary["max_composite"] = 0.0
-
     if best_placement:
         summary["top_rotation_deg"] = best_placement["rotation_deg"]
         summary["top_offset_x_m"] = best_placement["offset_x_m"]
@@ -1559,18 +1603,7 @@ def evaluate_parcel(
         summary["top_composite"] = best_placement["scores"]["composite_score"]
     else:
         summary["top_composite"] = 0.0
-
-    disqualified = not placements
-    return ParcelEvaluationResult(
-        parcel=parcel,
-        placements=placements,
-        summary=summary,
-        best_placement=best_placement,
-        best_geometry=best_geometry,
-        buildable=buildable,
-        roads=list(roads),
-        disqualified=disqualified,
-    )
+    return summary
 
 
 def plot_best_fit(
@@ -2003,6 +2036,28 @@ def evaluate_and_record(
     skip_roads: bool,
     score_workers: int,
 ) -> None:
+    parcel_slug = slugify(parcel.parcel_id)
+    parcel_dir = output_root / "parcels" / parcel_slug
+    parcel_dir.mkdir(parents=True, exist_ok=True)
+    parcel_detail = parcel_detail_record(parcel, parcel_info)
+
+    def write_progress(
+        summary: Dict[str, object],
+        best_geojson: Optional[Dict[str, object]],
+        placements: List[Dict[str, object]],
+    ) -> None:
+        payload = {
+            "parcel": parcel_detail,
+            "summary": summary,
+            "placements": placements,
+        }
+        if best_geojson:
+            payload["best_footprint_geojson"] = best_geojson
+        tmp_path = parcel_dir / "placements.partial.json"
+        final_path = parcel_dir / "placements.json"
+        with tmp_path.open("w", encoding="utf-8") as stream:
+            json.dump(payload, stream, indent=2)
+        tmp_path.replace(final_path)
     try:
         result = evaluate_parcel(
             parcel,
@@ -2020,6 +2075,7 @@ def evaluate_and_record(
             road_fetcher=road_fetcher,
             skip_roads=skip_roads,
             score_workers=score_workers,
+            progress_writer=write_progress,
         )
     except Exception as exc:  # noqa: BLE001
         logging.error("Evaluation failed for %s: %s", parcel.parcel_id, exc)
