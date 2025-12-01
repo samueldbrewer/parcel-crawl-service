@@ -1486,24 +1486,22 @@ def evaluate_parcel(
         except Exception as exc:  # noqa: BLE001
             logging.debug("Progress writer failed for %s: %s", parcel.parcel_id, exc)
 
-    def update_best_geometry() -> None:
-        nonlocal best_geometry
-        if best_placement is None:
-            return
-        try:
-            best_geometry = placement_to_geometry(best_placement, footprint_profile, parcel_geom)
-        except Exception as exc:  # noqa: BLE001
-            logging.warning("Failed to reconstruct interim best geometry for %s: %s", parcel.parcel_id, exc)
-            best_geometry = None
-
     def record_placement(placement: Dict[str, object]) -> None:
-        nonlocal best_placement, best_composite
+        nonlocal best_placement, best_composite, best_geometry
+        geometry: Optional[Polygon] = None
+        try:
+            geometry = placement_to_geometry(placement, footprint_profile, parcel_geom)
+        except Exception as exc:  # noqa: BLE001
+            logging.debug("Failed to derive placement geometry for %s: %s", parcel.parcel_id, exc)
+        if geometry is not None:
+            placement["footprint_geojson"] = mapping(geometry)
         placements.append(placement)
         composite_value = float(placement["scores"].get("composite_score", 0.0))
         if composite_value > best_composite:
             best_composite = composite_value
             best_placement = placement
-            update_best_geometry()
+            if geometry is not None:
+                best_geometry = geometry
         emit_progress()
 
     use_pool = score_workers > 1 and len(tasks) > 0
@@ -1557,7 +1555,11 @@ def evaluate_parcel(
             WORKER_CONTEXT.clear()
 
     if best_placement and best_geometry is None:
-        update_best_geometry()
+        try:
+            best_geometry = placement_to_geometry(best_placement, footprint_profile, parcel_geom)
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("Failed to reconstruct best geometry for %s (%s).", parcel.parcel_id, exc)
+            best_geometry = None
 
     summary = summarize_parcel_result(parcel, placements, offset_step, offset_range, best_placement)
 

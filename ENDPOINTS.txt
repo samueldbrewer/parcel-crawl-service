@@ -68,6 +68,7 @@ Debug
   - `GET /jobs/{id}/geo` only returns features once the crawler writes outputs. If it’s empty and `log_tail` shows no activity, the job may still be queued or waiting for the worker. If `log_tail` shows cycles progressing but no GeoJSON, wait for the first cycle to finish.
   - Cancel stuck jobs via `POST /jobs/{id}/cancel`; check `log_tail` first to avoid cancelling an active run mid-progress.
 - Streaming placements:
-  - `/jobs/{id}/artifacts` now surfaces each parcel’s `placements_json_url` as soon as the crawler starts evaluating it. Those JSON files are rewritten live with the current summary, best footprint, and placements array. Poll the URL to draw incremental placements + scores while later parcels continue running.
-  - Merge updates client-side: re-fetching the same `placements_json_url` returns the latest placements until the job completes.
+  - `/jobs/{id}/artifacts` now surfaces each parcel’s `placements_json_url` as soon as the crawler starts evaluating it. Those JSON files are rewritten live with the current summary, parcel metadata (including `geometry` coordinates), and placements array.
+  - Each placement entry includes `footprint_geojson` plus offsets, rotation, and scores. Poll the URL to draw parcel outlines, every placement footprint, and best footprints while later parcels continue running.
+  - Re-fetch the same `placements_json_url` to merge incremental updates client-side until the job completes.
 - Concurrency: the API runs up to `API_JOB_WORKERS` crawl jobs in parallel (default 2). Additional submissions queue until a worker thread is free.

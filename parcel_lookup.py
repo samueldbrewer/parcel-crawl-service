@@ -44,7 +44,7 @@ import numpy as np
 from PIL import Image
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from shapely.geometry import Polygon, shape
+from shapely.geometry import Polygon, shape, mapping
 from shapely.geometry.base import BaseGeometry
 
 GEOCODE_URL = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
@@ -969,6 +969,7 @@ def parcel_detail_record(parcel: ParcelFeature, extra: Optional[Dict[str, object
         "xmax": bounds[2],
         "ymax": bounds[3],
     }
+    detail["geometry"] = mapping(parcel.geometry)
     if extra:
         detail.update(extra)
     return detail
