@@ -71,4 +71,5 @@ Debug
   - `/jobs/{id}/artifacts` now surfaces each parcel’s `placements_json_url` as soon as the crawler starts evaluating it. Those JSON files are rewritten live with the current summary, parcel metadata (including `geometry` coordinates), and placements array.
   - Each placement entry includes `footprint_geojson` plus offsets, rotation, and scores. Poll the URL to draw parcel outlines, every placement footprint, and best footprints while later parcels continue running.
   - Re-fetch the same `placements_json_url` to merge incremental updates client-side until the job completes.
+  - Tail `/jobs/{id}/files/events.ndjson` (newline-delimited JSON) for push-style updates: events include `parcel_started`, `placement_scored`, `best_updated`, `parcel_failed`, and `parcel_completed`.
 - Concurrency: the API runs up to `API_JOB_WORKERS` crawl jobs in parallel (default 2). Additional submissions queue until a worker thread is free.

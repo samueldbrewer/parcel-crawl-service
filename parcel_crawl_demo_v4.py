@@ -11,6 +11,7 @@ import sys
 import threading
 import warnings
 import time
+from datetime import datetime
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -248,6 +249,22 @@ class RotationCacheEntry:
 WORKER_CONTEXT: Dict[str, object] = {}
 
 
+class EventRecorder:
+    def __init__(self, path: Path):
+        self.path = path
+        self.lock = threading.Lock()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    def emit(self, event_type: str, payload: Dict[str, object]) -> None:
+        event = {
+            "type": event_type,
+            "timestamp": datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
+        }
+        event.update(payload)
+        line = json.dumps(event, default=str)
+        with self.lock:
+            with self.path.open("a", encoding="utf-8") as stream:
+                stream.write(line + "\n")
 def install_warning_capture() -> None:
     global _ORIGINAL_SHOWWARNING
     if _ORIGINAL_SHOWWARNING is not None:
@@ -1396,6 +1413,7 @@ def evaluate_parcel(
     progress_writer: Optional[
         Callable[[Dict[str, object], Optional[Dict[str, object]], List[Dict[str, object]]], None]
     ] = None,
+    event_recorder: Optional[EventRecorder] = None,
 ) -> ParcelEvaluationResult:
     WARNING_COUNTS[ORIENTED_WARNING_KEY] = 0
     install_warning_capture()
@@ -1486,22 +1504,49 @@ def evaluate_parcel(
         except Exception as exc:  # noqa: BLE001
             logging.debug("Progress writer failed for %s: %s", parcel.parcel_id, exc)
 
+    placement_sequence = 0
+
     def record_placement(placement: Dict[str, object]) -> None:
-        nonlocal best_placement, best_composite, best_geometry
+        nonlocal best_placement, best_composite, best_geometry, placement_sequence
         geometry: Optional[Polygon] = None
         try:
             geometry = placement_to_geometry(placement, footprint_profile, parcel_geom)
         except Exception as exc:  # noqa: BLE001
             logging.debug("Failed to derive placement geometry for %s: %s", parcel.parcel_id, exc)
-        if geometry is not None:
-            placement["footprint_geojson"] = mapping(geometry)
+        if geometry is None:
+            geometry = buildable
+        placement["footprint_geojson"] = mapping(geometry)
         placements.append(placement)
+        placement_sequence += 1
         composite_value = float(placement["scores"].get("composite_score", 0.0))
+        is_best = False
         if composite_value > best_composite:
             best_composite = composite_value
             best_placement = placement
-            if geometry is not None:
-                best_geometry = geometry
+            best_geometry = geometry
+            is_best = True
+        if event_recorder:
+            event_recorder.emit(
+                "placement_scored",
+                {
+                    "parcel_id": parcel.parcel_id,
+                    "index": placement_sequence,
+                    "rotation_deg": placement.get("rotation_deg"),
+                    "offset_x_m": placement.get("offset_x_m"),
+                    "offset_y_m": placement.get("offset_y_m"),
+                    "composite_score": placement["scores"].get("composite_score"),
+                    "is_best": is_best,
+                },
+            )
+            if is_best:
+                event_recorder.emit(
+                    "best_updated",
+                    {
+                        "parcel_id": parcel.parcel_id,
+                        "index": placement_sequence,
+                        "composite_score": placement["scores"].get("composite_score"),
+                    },
+                )
         emit_progress()
 
     use_pool = score_workers > 1 and len(tasks) > 0
@@ -2037,6 +2082,7 @@ def evaluate_and_record(
     road_fetcher: Optional[Callable[[Tuple[float, float, float, float]], List[LineString]]],
     skip_roads: bool,
     score_workers: int,
+    event_recorder: Optional[EventRecorder] = None,
 ) -> None:
     parcel_slug = slugify(parcel.parcel_id)
     parcel_dir = output_root / "parcels" / parcel_slug
@@ -2060,6 +2106,34 @@ def evaluate_and_record(
         with tmp_path.open("w", encoding="utf-8") as stream:
             json.dump(payload, stream, indent=2)
         tmp_path.replace(final_path)
+        if event_recorder:
+            event_recorder.emit(
+                "parcel_progress",
+                {
+                    "parcel_id": parcel.parcel_id,
+                    "placements": len(placements),
+                    "best_composite": summary.get("top_composite"),
+                },
+            )
+
+    # seed a stub so the parcel boundary appears immediately
+    write_progress(
+        {
+            "parcel_id": parcel.parcel_id,
+            "address": parcel.address,
+            "placements_evaluated": 0,
+            "offset_step_m": None,
+            "offset_range_m": None,
+            "viable_count": 0,
+            "average_composite": 0.0,
+            "max_composite": 0.0,
+            "top_composite": 0.0,
+        },
+        None,
+        [],
+    )
+    if event_recorder:
+        event_recorder.emit("parcel_started", {"parcel_id": parcel.parcel_id})
     try:
         result = evaluate_parcel(
             parcel,
@@ -2078,9 +2152,12 @@ def evaluate_and_record(
             skip_roads=skip_roads,
             score_workers=score_workers,
             progress_writer=write_progress,
+            event_recorder=event_recorder,
         )
     except Exception as exc:  # noqa: BLE001
         logging.error("Evaluation failed for %s: %s", parcel.parcel_id, exc)
+        if event_recorder:
+            event_recorder.emit("parcel_failed", {"parcel_id": parcel.parcel_id, "error": str(exc)})
         return
 
     results[parcel.parcel_id] = result
@@ -2093,6 +2170,15 @@ def evaluate_and_record(
         render_best=render_best,
         render_composite=render_composite,
     )
+    if event_recorder:
+        event_recorder.emit(
+            "parcel_completed",
+            {
+                "parcel_id": parcel.parcel_id,
+                "placements": len(result.placements),
+                "top_composite": result.summary.get("top_composite"),
+            },
+        )
 
 
 def crawl_parcels(
@@ -2135,6 +2221,7 @@ def crawl_parcels(
     cycles_output.mkdir(exist_ok=True)
     parcels_output = output_dir / "parcels"
     parcels_output.mkdir(exist_ok=True)
+    event_recorder = EventRecorder(output_dir / "events.ndjson")
 
     if max_cycles > 100:
         logging.warning("Cycle count capped to 100 (requested %d).", max_cycles)
@@ -2207,6 +2294,7 @@ def crawl_parcels(
         road_fetcher=road_fetcher,
         skip_roads=skip_roads,
         score_workers=score_workers,
+        event_recorder=event_recorder,
     )
 
     visited_ids: set[str] = {target.parcel_id}
@@ -2300,11 +2388,12 @@ def crawl_parcels(
                         min_composite=min_composite,
                         parcel_callback=parcel_callback,
                         render_best=render_best,
-                        render_composite=render_composite,
-                        road_fetcher=road_fetcher,
-                        skip_roads=skip_roads,
-                        score_workers=score_workers,
-                    )
+                    render_composite=render_composite,
+                    road_fetcher=road_fetcher,
+                    skip_roads=skip_roads,
+                    score_workers=score_workers,
+                    event_recorder=event_recorder,
+                )
                     picked.append(neighbor)
                     if len(picked) >= 2:
                         break
