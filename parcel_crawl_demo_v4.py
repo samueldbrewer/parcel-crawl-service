@@ -1526,27 +1526,25 @@ def evaluate_parcel(
             best_geometry = geometry
             is_best = True
         if event_recorder:
-            event_recorder.emit(
-                "placement_scored",
-                {
+            event_payload = {
+                "parcel_id": parcel.parcel_id,
+                "index": placement_sequence,
+                "rotation_deg": placement.get("rotation_deg"),
+                "offset_x_m": placement.get("offset_x_m"),
+                "offset_y_m": placement.get("offset_y_m"),
+                "composite_score": placement["scores"].get("composite_score"),
+                "is_best": is_best,
+                "footprint_geojson": placement["footprint_geojson"],
+            }
+            event_recorder.emit("placement_scored", event_payload)
+            if is_best:
+                best_payload = {
                     "parcel_id": parcel.parcel_id,
                     "index": placement_sequence,
-                    "rotation_deg": placement.get("rotation_deg"),
-                    "offset_x_m": placement.get("offset_x_m"),
-                    "offset_y_m": placement.get("offset_y_m"),
                     "composite_score": placement["scores"].get("composite_score"),
-                    "is_best": is_best,
-                },
-            )
-            if is_best:
-                event_recorder.emit(
-                    "best_updated",
-                    {
-                        "parcel_id": parcel.parcel_id,
-                        "index": placement_sequence,
-                        "composite_score": placement["scores"].get("composite_score"),
-                    },
-                )
+                    "footprint_geojson": placement["footprint_geojson"],
+                }
+                event_recorder.emit("best_updated", best_payload)
         emit_progress()
 
     use_pool = score_workers > 1 and len(tasks) > 0
@@ -2133,7 +2131,13 @@ def evaluate_and_record(
         [],
     )
     if event_recorder:
-        event_recorder.emit("parcel_started", {"parcel_id": parcel.parcel_id})
+        event_recorder.emit(
+            "parcel_started",
+            {
+                "parcel_id": parcel.parcel_id,
+                "parcel": parcel_detail,
+            },
+        )
     try:
         result = evaluate_parcel(
             parcel,
