@@ -81,3 +81,15 @@ async def read_design(slug: str) -> dict[str, object]:
         return json.loads(target.read_text())
     except json.JSONDecodeError:
         raise HTTPException(status_code=500, detail="Design file is corrupted.")
+
+
+@router.delete("/{slug}")
+async def delete_design(slug: str) -> dict[str, object]:
+    target = DESIGN_ROOT / f"{slug}.json"
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Design not found.")
+    try:
+        target.unlink()
+    except OSError as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to delete design: {exc}") from exc
+    return {"deleted": True, "slug": slug}
