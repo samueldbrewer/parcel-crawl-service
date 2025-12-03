@@ -249,6 +249,86 @@ class RotationCacheEntry:
 WORKER_CONTEXT: Dict[str, object] = {}
 
 
+def _overlay_path(output_root: Path) -> Path:
+    return output_root / "overlay.json"
+
+
+def _load_overlay(path: Path) -> dict[str, object]:
+    if path.exists():
+        try:
+            return json.loads(path.read_text())
+        except json.JSONDecodeError:
+            logging.warning("Overlay snapshot at %s is corrupted; recreating.", path)
+    return {
+        "updated_at": None,
+        "parcels": {},
+        "placements": {},
+        "best": {},
+        "shadows": {},
+    }
+
+
+def _feature_collection(features: Iterable[dict[str, object]]) -> dict[str, object]:
+    return {"type": "FeatureCollection", "features": list(features)}
+
+
+def update_overlay_snapshot(
+    overlay_path: Path,
+    parcel_detail: dict[str, object],
+    result: ParcelEvaluationResult,
+) -> None:
+    overlay = _load_overlay(overlay_path)
+    parcel_id = result.parcel.parcel_id
+    parcel_geom = parcel_detail.get("geometry")
+    overlay["updated_at"] = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+
+    if parcel_geom:
+        overlay_parcels = overlay.setdefault("parcels", {})
+        overlay_parcels[parcel_id] = {
+            "type": "Feature",
+            "geometry": parcel_geom,
+            "properties": {
+                "parcel_id": parcel_id,
+                "address": parcel_detail.get("SITEADDRESS") or parcel_detail.get("official_address"),
+                "viable_count": result.summary.get("viable_count"),
+                "max_composite": result.summary.get("max_composite"),
+            },
+        }
+
+    placement_features: list[dict[str, object]] = []
+    for placement in result.placements:
+        geom = placement.get("footprint_geojson")
+        if not geom:
+            continue
+        placement_features.append(
+            {
+                "type": "Feature",
+                "geometry": geom,
+                "properties": {
+                    "parcel_id": parcel_id,
+                    "index": placement_features.__len__() + 1,
+                    "rotation_deg": placement.get("rotation_deg"),
+                    "offset_x_m": placement.get("offset_x_m"),
+                    "offset_y_m": placement.get("offset_y_m"),
+                    "composite_score": placement.get("scores", {}).get("composite_score"),
+                },
+            }
+        )
+    overlay.setdefault("placements", {})[parcel_id] = placement_features
+
+    if result.best_geometry is not None:
+        overlay.setdefault("best", {})[parcel_id] = {
+            "type": "Feature",
+            "geometry": mapping(result.best_geometry),
+            "properties": {
+                "parcel_id": parcel_id,
+                "composite_score": result.summary.get("top_composite"),
+            },
+        }
+
+    overlay_path.write_text(json.dumps(overlay))
+
+
 class EventRecorder:
     def __init__(self, path: Path):
         self.path = path
@@ -2081,6 +2161,7 @@ def evaluate_and_record(
     skip_roads: bool,
     score_workers: int,
     event_recorder: Optional[EventRecorder] = None,
+    overlay_path: Optional[Path] = None,
 ) -> None:
     parcel_slug = slugify(parcel.parcel_id)
     parcel_dir = output_root / "parcels" / parcel_slug
@@ -2183,6 +2264,11 @@ def evaluate_and_record(
                 "top_composite": result.summary.get("top_composite"),
             },
         )
+    if overlay_path is not None:
+        try:
+            update_overlay_snapshot(overlay_path, parcel_detail, result)
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("Failed to update overlay snapshot for %s: %s", parcel.parcel_id, exc)
 
 
 def crawl_parcels(
@@ -2225,6 +2311,9 @@ def crawl_parcels(
     cycles_output.mkdir(exist_ok=True)
     parcels_output = output_dir / "parcels"
     parcels_output.mkdir(exist_ok=True)
+    overlay_file = _overlay_path(output_dir)
+    if not overlay_file.exists():
+        overlay_file.write_text(json.dumps(_load_overlay(overlay_file)))
     event_recorder = EventRecorder(output_dir / "events.ndjson")
 
     if max_cycles > 100:
@@ -2299,6 +2388,7 @@ def crawl_parcels(
         skip_roads=skip_roads,
         score_workers=score_workers,
         event_recorder=event_recorder,
+        overlay_path=overlay_file,
     )
 
     visited_ids: set[str] = {target.parcel_id}
@@ -2392,12 +2482,13 @@ def crawl_parcels(
                         min_composite=min_composite,
                         parcel_callback=parcel_callback,
                         render_best=render_best,
-                    render_composite=render_composite,
-                    road_fetcher=road_fetcher,
-                    skip_roads=skip_roads,
-                    score_workers=score_workers,
-                    event_recorder=event_recorder,
-                )
+                        render_composite=render_composite,
+                        road_fetcher=road_fetcher,
+                        skip_roads=skip_roads,
+                        score_workers=score_workers,
+                        event_recorder=event_recorder,
+                        overlay_path=overlay_file,
+                    )
                     picked.append(neighbor)
                     if len(picked) >= 2:
                         break

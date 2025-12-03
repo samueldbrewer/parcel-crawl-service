@@ -72,4 +72,5 @@ Debug
   - Each placement entry includes `footprint_geojson` plus offsets, rotation, and scores. Poll the URL to draw parcel outlines, every placement footprint, and best footprints while later parcels continue running.
   - Re-fetch the same `placements_json_url` to merge incremental updates client-side until the job completes.
   - Use `GET /jobs/{id}/events?cursor=<bytes>&max_bytes=<bytes>` to fetch incremental NDJSON events without re-downloading the entire log. Responses include the next cursor plus the decoded event objects (`parcel_started`, `placement_scored`, `best_updated`, `parcel_failed`, `parcel_completed`), each carrying the relevant geometry. Poll with the returned cursor for tail-like behavior.
+  - `GET /jobs/{id}/overlay` returns a consolidated snapshot with FeatureCollections for parcels, placements (all tested footprints), current best footprints, and shadows. This file updates whenever a parcel completes or a best placement changes, so the frontend can refresh all layers via one request.
 - Concurrency: the API runs up to `API_JOB_WORKERS` crawl jobs in parallel (default 2). Additional submissions queue until a worker thread is free.

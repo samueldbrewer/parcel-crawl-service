@@ -2,7 +2,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -291,6 +291,41 @@ async def read_job_events(job_id: str, cursor: int = 0, max_bytes: int = 262144)
         "cursor": new_cursor,
         "events": events,
         "has_more": has_more,
+    }
+
+
+@router.get("/{job_id}/overlay")
+async def read_job_overlay(job_id: str) -> dict[str, object]:
+    overlay_path = JOB_STORAGE / job_id / "outputs" / "overlay.json"
+    if not overlay_path.exists():
+        raise HTTPException(status_code=404, detail="Overlay not available yet.")
+    try:
+        overlay = json.loads(overlay_path.read_text())
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail="Overlay snapshot is corrupted.") from exc
+
+    def _fc(items: Iterable[dict[str, object]]) -> dict[str, object]:
+        return {"type": "FeatureCollection", "features": list(items)}
+
+    parcels = overlay.get("parcels", {})
+    placements = overlay.get("placements", {})
+    best = overlay.get("best", {})
+    shadows = overlay.get("shadows", {})
+
+    return {
+        "updated_at": overlay.get("updated_at"),
+        "parcels": _fc(parcels.values() if isinstance(parcels, dict) else []),
+        "placements": _fc(
+            feat
+            for plist in (placements.values() if isinstance(placements, dict) else [])
+            for feat in plist
+        ),
+        "best": _fc(best.values() if isinstance(best, dict) else []),
+        "shadows": _fc(
+            feat
+            for plist in (shadows.values() if isinstance(shadows, dict) else [])
+            for feat in plist
+        ),
     }
 
 
