@@ -244,6 +244,56 @@ async def read_job_geo(job_id: str, request: Request) -> dict[str, object]:
     }
 
 
+@router.get("/{job_id}/events")
+async def read_job_events(job_id: str, cursor: int = 0, max_bytes: int = 262144) -> dict[str, object]:
+    """Return NDJSON events produced during the crawl starting from a byte cursor."""
+    if cursor < 0:
+        cursor = 0
+    max_bytes = max(1024, min(max_bytes, 1_048_576))
+    event_path = JOB_STORAGE / job_id / "outputs" / "events.ndjson"
+    if not event_path.exists():
+        raise HTTPException(status_code=404, detail="Events not available yet.")
+
+    events: list[dict[str, object]] = []
+    new_cursor = cursor
+    truncated = False
+
+    try:
+        with event_path.open("r", encoding="utf-8") as stream:
+            stream.seek(cursor)
+            while True:
+                pos_before = stream.tell()
+                line = stream.readline()
+                if not line:
+                    break
+                pos_after = stream.tell()
+                if events and (pos_after - cursor) > max_bytes:
+                    stream.seek(pos_before)
+                    truncated = True
+                    break
+                new_cursor = pos_after
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    events.append(json.loads(line))
+                except json.JSONDecodeError:
+                    # Encountered partial line; rewind and return so the client can retry later.
+                    stream.seek(pos_before)
+                    new_cursor = pos_before
+                    truncated = True
+                    break
+    except OSError as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Failed to read events: {exc}") from exc
+
+    has_more = truncated or event_path.stat().st_size > new_cursor
+    return {
+        "cursor": new_cursor,
+        "events": events,
+        "has_more": has_more,
+    }
+
+
 def update_job_status(
     job_id: str,
     status: str,
