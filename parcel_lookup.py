@@ -56,26 +56,48 @@ TOKEN_SOURCES = [
 ]
 PROPINFO_BASE = "https://gis.atlantaga.gov/propinfo/"
 DOCUMENT_ARCHIVE_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/DocumentArchive/Layers/MapServer/3"
-OFFICIAL_ZONING_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/LandUsePlanning/MapServer/0"
+# Multiple zoning layers are tried in order to tolerate service changes.
+OFFICIAL_ZONING_LAYERS = [
+    "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/LotsWithZoning/MapServer/0",
+    "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/LandUsePlanning/MapServer/0",
+]
 ZONING_OVERLAY_LAYERS = [
     {
-        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/LandUsePlanning/MapServer/2",
-        "name_field": "NAME",
-        "description_field": "DESCRIPTION",
-        "fields": ["NAME", "DESCRIPTION", "PDF_LINK"],
+        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/IncentiveZone/MapServer/0",
+        "name_field": "ZONENAME",
+        "description_field": "ZONEDESC",
+        "fields": ["ZONENAME", "ZONEDESC", "ZONEURL"],
     },
     {
-        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/IncentiveZone/MapServer/0",
-        "name_field": "ZONEDESC",
+        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/IncentiveZone/MapServer/1",
+        "name_field": "ZONENAME",
         "description_field": "ZONEDESC",
-        "fields": ["ZONEDESC", "NAME", "URL"],
+        "fields": ["ZONENAME", "ZONEDESC", "ZONEURL"],
+    },
+    {
+        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/IncentiveZone/MapServer/2",
+        "name_field": "ZONENAME",
+        "description_field": "ZONEDESC",
+        "fields": ["ZONENAME", "ZONEDESC", "ZONEURL"],
+    },
+    {
+        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/IncentiveZone/MapServer/3",
+        "name_field": "ZONENAME",
+        "description_field": "ZONEDESC",
+        "fields": ["ZONENAME", "ZONEDESC", "ZONEURL"],
+    },
+    {
+        "service": "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/IncentiveZone/MapServer/4",
+        "name_field": "ZONENAME",
+        "description_field": "ZONEDESC",
+        "fields": ["ZONENAME", "ZONEDESC", "ZONEURL"],
     },
 ]
 DEVELOPMENT_PATTERN_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/LandUsePlanning/LandUsePlanning/MapServer/8"
 LAND_LOT_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/3"
-COUNCIL_DISTRICT_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/1"
+COUNCIL_DISTRICT_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/4"
 NPU_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/2"
-NEIGHBORHOOD_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/4"
+NEIGHBORHOOD_LAYER = "https://gis.atlantaga.gov/dpcd/rest/services/AdministrativeArea/GeopoliticalArea/MapServer/1"
 DEFAULT_OUT_FIELDS = ",".join(
     [
         "OBJECTID",
@@ -333,7 +355,7 @@ def execute_arcgis_query(
     token: Optional[str],
     where: str = "1=1",
     return_geometry: bool = False,
-    result_record_count: int = 100,
+    result_record_count: Optional[int] = 100,
     require_token: bool = False,
 ) -> Dict[str, object]:
     params = {
@@ -345,10 +367,19 @@ def execute_arcgis_query(
         "spatialRel": "esriSpatialRelIntersects",
         "outFields": normalize_out_fields(out_fields),
         "returnGeometry": json.dumps(return_geometry).lower(),
-        "resultRecordCount": result_record_count,
         "geometry": json.dumps(geometry),
     }
-    return _arcgis_request(f"{service_url}/query", params, token, require_token=require_token)
+    if result_record_count is not None:
+        params["resultRecordCount"] = result_record_count
+
+    try:
+        return _arcgis_request(f"{service_url}/query", params, token, require_token=require_token)
+    except RuntimeError as exc:
+        message = str(exc)
+        if "Pagination is not supported" in message and result_record_count is not None:
+            params.pop("resultRecordCount", None)
+            return _arcgis_request(f"{service_url}/query", params, token, require_token=require_token)
+        raise
 
 
 def geocode_address(address: str) -> Dict[str, object]:
@@ -1034,19 +1065,22 @@ def fetch_property_info(
             document_record["DOC_LINK"] = normalize_link(document_record.get("DOC_LINK"))
     property_info["document"] = document_record
 
-    zoning_layer_id = split_service_layer(OFFICIAL_ZONING_LAYER)[1]
-    zoning_attrs = safe_point_query(
-        OFFICIAL_ZONING_LAYER,
-        ["ZONECLASS", "ZONEDESC", "ZONETYPE", "ZONE_NAME", "ZONECLASSIFICATION"],
-        "official zoning",
-        x_merc=x_merc,
-        y_merc=y_merc,
-        token=token,
-        max_features=5,
-        layer_ids=[zoning_layer_id] if zoning_layer_id is not None else None,
-    )
-    if zoning_attrs is None:
-        zoning_attrs = []
+    zoning_attrs: List[Dict[str, object]] = []
+    for zoning_layer in OFFICIAL_ZONING_LAYERS:
+        zoning_layer_id = split_service_layer(zoning_layer)[1]
+        zoning_attrs = safe_point_query(
+            zoning_layer,
+            ["ZONECLASS", "ZONEDESC", "ZONETYPE", "ZONE_NAME", "ZONECLASSIFICATION", "ZONINGCODE", "MUNI_LINK"],
+            "official zoning",
+            x_merc=x_merc,
+            y_merc=y_merc,
+            token=token,
+            max_features=5,
+            layer_ids=[zoning_layer_id] if zoning_layer_id is not None else None,
+        ) or []
+        if zoning_attrs:
+            break
+
     if zoning_attrs:
         chosen = zoning_attrs[0]
         property_info["official_zoning"] = (
@@ -1070,10 +1104,12 @@ def fetch_property_info(
         for key, value in chosen.items():
             if not isinstance(value, str):
                 continue
-            if "pdf" in key.lower() or value.lower().endswith(".pdf"):
+            if "pdf" in key.lower() or (isinstance(value, str) and value.lower().endswith(".pdf")):
                 pdf_link = normalize_link(value)
                 if pdf_link:
                     break
+            if not pdf_link and key.upper() == "MUNI_LINK":
+                pdf_link = normalize_link(value)
         if pdf_link:
             property_info["official_zoning_pdf"] = pdf_link
 
