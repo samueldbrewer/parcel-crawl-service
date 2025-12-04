@@ -345,7 +345,6 @@ def execute_arcgis_query(
         "spatialRel": "esriSpatialRelIntersects",
         "outFields": normalize_out_fields(out_fields),
         "returnGeometry": json.dumps(return_geometry).lower(),
-        "resultOffset": 0,
         "resultRecordCount": result_record_count,
         "geometry": json.dumps(geometry),
     }
