@@ -1728,7 +1728,7 @@ def summarize_parcel_result(
         summary["top_composite"] = best_placement["scores"]["composite_score"]
     else:
         summary["top_composite"] = 0.0
-    return summary
+  return summary
 
 
 def plot_best_fit(
@@ -2424,11 +2424,13 @@ def crawl_parcels(
             except Exception:
                 logging.debug("Cycle progress callback failed during init.")
 
-        futures = []
-        with ThreadPoolExecutor(max_workers=max(1, workers)) as executor:
-            for seed in frontier:
-                futures.append(
-                    executor.submit(
+        seed_queue = list(frontier)
+        inflight: list[tuple[ParcelFeature, "Future[tuple[ParcelFeature, List[ParcelFeature], int, float, float]]"]] = []
+        with ThreadPoolExecutor(max_workers=max(1, parcel_workers or workers)) as executor:
+            while seed_queue or inflight:
+                while seed_queue and len(inflight) < max(1, parcel_workers or workers):
+                    seed = seed_queue.pop(0)
+                    future = executor.submit(
                         _process_seed,
                         seed,
                         buffer_meters,
@@ -2436,9 +2438,20 @@ def crawl_parcels(
                         token,
                         visited_ids.copy(),
                     )
-                )
+                    inflight.append((seed, future))
 
-            for future in as_completed(futures):
+                # Wait for the next completed seed
+                done_index = None
+                for idx, (_seed, future) in enumerate(inflight):
+                    if future.done():
+                        done_index = idx
+                        break
+                if done_index is None:
+                    _seed, future = inflight[0]
+                    future.result()
+                    done_index = 0
+
+                seed, future = inflight.pop(done_index)
                 seed, candidates, total_raw_candidates, start_buffer, final_buffer = future.result()
                 picked: List[ParcelFeature] = []
                 for neighbor in candidates:
