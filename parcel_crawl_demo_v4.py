@@ -1728,7 +1728,7 @@ def summarize_parcel_result(
         summary["top_composite"] = best_placement["scores"]["composite_score"]
     else:
         summary["top_composite"] = 0.0
-  return summary
+    return summary
 
 
 def plot_best_fit(
