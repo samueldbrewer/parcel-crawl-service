@@ -2298,6 +2298,7 @@ def crawl_parcels(
     render_composite: bool = True,
     skip_roads: bool = False,
     score_workers: int = 1,
+    parcel_workers: Optional[int] = None,
 ) -> None:
     global ROAD_FAILURE_COUNT, ROAD_BACKOFF_UNTIL, LAST_ROAD_FETCH, OVERPASS_INDEX, ROAD_MASTER_LINES, ROAD_MASTER_BOUNDS
     ROAD_FAILURE_COUNT = 0
